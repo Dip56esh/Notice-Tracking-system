@@ -1,6 +1,6 @@
 # Digital Notice & Letter Tracking System
 
-### Stack: React (Vite) · Django REST Framework · SQLite · JWT Auth
+### Stack: React (Vite) · Django REST Framework 
 
 ---
 
