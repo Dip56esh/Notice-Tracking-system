@@ -16,42 +16,42 @@ NEA_dclts_prj/
 │       ├── urls.py
 │       ├── wsgi.py
 │       ├── users/
-│       │   ├── models.py         ← Custom User model
+│       │   ├── models.py         
 │       │   ├── serializers.py
-│       │   ├── views.py          ← Login, Register, /me, User list
+│       │   ├── views.py          
 │       │   ├── urls.py
 │       │   ├── admin.py
 │       │   └── management/commands/seed.py
 │       ├── organizations/
-│       │   ├── models.py         ← Organization, Department
+│       │   ├── models.py         
 │       │   ├── serializers.py
 │       │   ├── views.py
 │       │   ├── urls.py
 │       │   └── admin.py
 │       └── notices/
-│           ├── models.py         ← Notice, NoticeEvent, ReferenceCounter
+│           ├── models.py         
 │           ├── serializers.py
-│           ├── views.py          ← CRUD + lifecycle + stats
+│           ├── views.py          
 │           ├── urls.py
 │           └── admin.py
 └── frontend/
     ├── package.json
-    ├── vite.config.js            ← Proxies /api → localhost:8000
+    ├── vite.config.js            
     ├── index.html
     └── src/
         ├── main.jsx
         ├── App.jsx
         ├── index.css
-        ├── utils/api.js          ← Axios client (auto JWT)
-        ├── hooks/useAuth.jsx     ← Auth context + login/logout
+        ├── utils/api.js          
+        ├── hooks/useAuth.jsx     
         ├── components/
-        │   ├── Layout.jsx        ← Sidebar navigation
-        │   ├── NoticeTable.jsx   ← Reusable table
-        │   └── NoticeDetail.jsx  ← Slide-in panel + timeline + status actions
+        │   ├── Layout.jsx        
+        │   ├── NoticeTable.jsx   
+        │   └── NoticeDetail.jsx  
         └── pages/
             ├── LoginPage.jsx
             ├── Dashboard.jsx
-            ├── ComposePage.jsx       ← Free-text org entry
+            ├── ComposePage.jsx       
             ├── OutboxPage.jsx
             ├── InboxPage.jsx
             ├── OrganizationsPage.jsx
@@ -129,30 +129,6 @@ Password: admin123
 
 ---
 
-## Notice lifecycle
-
-```
-DRAFT → APPROVED → SENT → DELIVERED → RECEIVED
-      ↘ REJECTED       → ACKNOWLEDGED → IN_REVIEW → ACTION_TAKEN → CLOSED
-                                      ↘ CLOSED
-```
-
-- Reference number is generated **atomically** when status moves to APPROVED
-- Format: `ORG_CODE/DEPT_CODE/YEAR/SEQUENCE` e.g. `MOF/FIN/2025/000023`
-- Every status change creates a timestamped `NoticeEvent` row (the timeline)
-
----
-
-## Organization entry
-
-When composing a notice the user can either:
-
-- **Select existing** — pick from dropdown of organizations already in the system
-- **Enter new org** — type org name + code + dept name + code freely
-
-New organizations are auto-created and immediately available for future notices.
-
----
 
 ## Django admin
 
