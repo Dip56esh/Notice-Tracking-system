@@ -35,7 +35,11 @@ export default function NoticeTable({ notices = [], onRowClick, mini = false, di
               <td><span className={`type-${n.type}`}>{n.type?.toUpperCase()}</span></td>
               <td><span className={`badge badge-${n.priority}`}>{n.priority?.toUpperCase()}</span></td>
               {!mini && <td style={{ fontSize: 11.5 }}>{n.sender_org_code}/{n.sender_dept_code}</td>}
-              {!mini && <td style={{ fontSize: 11.5 }}>{n.receiver_org_code}/{n.receiver_dept_code}</td>}
+              {!mini && <td style={{ fontSize: 11.5 }}>
+                {n.receivers && n.receivers.length > 0
+                  ? n.receivers.map(r => `${r.receiver_org_code}/${r.receiver_dept_code}`).join(', ')
+                  : n.receiver_org_code ? `${n.receiver_org_code}/${n.receiver_dept_code}` : '—'}
+              </td>}
               <td>
                 <span className={`badge badge-${n.status}`}>{n.status}</span>
                 {direction === 'inbox' && ['RECEIVED','ACKNOWLEDGED','IN_REVIEW','ACTION_TAKEN','CLOSED'].includes(n.status) && (

@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/api.js';
 
 
-function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true }) {
+function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true, allowMultiple = false }) {
   const [mode, setMode]             = useState('existing');
   const [selectedOrgId, setOrgId]   = useState('');
-  const [selectedDeptId, setDeptId] = useState('');
+  const [selectedDeptIds, setDeptIds] = useState([]);
   const [orgName,  setOrgName]      = useState('');
   const [orgCode,  setOrgCode]      = useState('');
   const [deptName, setDeptName]     = useState('');
@@ -23,27 +23,42 @@ function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true }) {
   // Notify parent whenever selection changes
   useEffect(() => {
     if (mode === 'existing') {
-      if (selectedOrgId && selectedDeptId) {
-        onChange({ orgId: selectedOrgId, deptId: selectedDeptId });
+      if (selectedOrgId && selectedDeptIds.length > 0) {
+        const selections = selectedDeptIds.map(deptId => ({ orgId: selectedOrgId, deptId }));
+        onChange(allowMultiple ? selections : selections[0]);
       } else {
         onChange(null);
       }
     } else {
       if (orgName && orgCode && deptName && deptCode) {
-        onChange({ newOrg: { name: orgName, code: orgCode.toUpperCase(), type: 'external' },
+        onChange(allowMultiple ? [{ newOrg: { name: orgName, code: orgCode.toUpperCase(), type: 'external' },
+                   newDept: { name: deptName, code: deptCode.toUpperCase() } }] : 
+                 { newOrg: { name: orgName, code: orgCode.toUpperCase(), type: 'external' },
                    newDept: { name: deptName, code: deptCode.toUpperCase() } });
       } else {
         onChange(null);
       }
     }
-  }, [mode, selectedOrgId, selectedDeptId, orgName, orgCode, deptName, deptCode]);
+  }, [mode, selectedOrgId, selectedDeptIds, orgName, orgCode, deptName, deptCode, allowMultiple]);
+
+  const handleDeptToggle = (deptId) => {
+    if (allowMultiple) {
+      setDeptIds(prev => 
+        prev.includes(deptId) 
+          ? prev.filter(id => id !== deptId)
+          : [...prev, deptId]
+      );
+    } else {
+      setDeptIds([deptId]);
+    }
+  };
 
   return (
     <div className="org-selector-box">
       <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--muted)', marginBottom: 10 }}>{label}</div>
 
       {/* Mode toggle */}
-      {allowNewOrg && (
+      {allowNewOrg && !allowMultiple && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
           <button type="button" className={`btn btn-sm ${mode === 'existing' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setMode('existing')}>
@@ -60,19 +75,34 @@ function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div className="form-group">
             <label>Organization</label>
-            <select value={selectedOrgId} onChange={e => { setOrgId(e.target.value); setDeptId(''); }}>
+            <select value={selectedOrgId} onChange={e => { setOrgId(e.target.value); setDeptIds([]); }}>
               <option value="">— Select organization —</option>
               {orgs.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code})</option>)}
             </select>
           </div>
           <div className="form-group">
-            <label>Department</label>
-            <select value={selectedDeptId} onChange={e => setDeptId(e.target.value)} disabled={!selectedOrgId}>
-              <option value="">— Select department —</option>
+            <label>Department{allowMultiple ? 's' : ''}</label>
+            <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '4px', padding: '8px' }}>
               {(selectedOrg?.departments || []).map(d => (
-                <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <input
+                    type={allowMultiple ? "checkbox" : "radio"}
+                    id={`dept-${d.id}`}
+                    name="department"
+                    checked={selectedDeptIds.includes(d.id)}
+                    onChange={() => handleDeptToggle(d.id)}
+                  />
+                  <label htmlFor={`dept-${d.id}`} style={{ margin: 0, cursor: 'pointer' }}>
+                    {d.name} ({d.code})
+                  </label>
+                </div>
               ))}
-            </select>
+            </div>
+            {selectedDeptIds.length > 0 && allowMultiple && (
+              <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px' }}>
+                {selectedDeptIds.length} department{selectedDeptIds.length > 1 ? 's' : ''} selected
+              </div>
+            )}
           </div>
         </div>
       ) : (
@@ -104,33 +134,41 @@ function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true }) {
   );
 }
 
-/* ── Resolve or create org+dept, return { orgId, deptId } ─────────────────── */
-async function resolveOrgDept(selection, orgs) {
-  if (!selection) throw new Error('Please complete the organization selection.');
+/* ── Resolve or create org+dept, return array of { orgId, deptId } ─────────────────── */
+async function resolveOrgDept(selections, orgs) {
+  if (!selections) throw new Error('Please complete the organization selection.');
+  
+  // Handle both single selection and array of selections
+  const selectionArray = Array.isArray(selections) ? selections : [selections];
+  const results = [];
 
-  if (selection.orgId && selection.deptId) {
-    return { orgId: selection.orgId, deptId: selection.deptId };
+  for (const selection of selectionArray) {
+    if (selection.orgId && selection.deptId) {
+      results.push({ orgId: selection.orgId, deptId: selection.deptId });
+    } else {
+      const { newOrg, newDept } = selection;
+
+      // Create org (or find existing by code if 409)
+      let orgId;
+      try {
+        const res = await api.post('/organizations/', newOrg);
+        orgId = res.data.id;
+      } catch (err) {
+        if (err.response?.status === 400 && err.response.data?.code) {
+          // Code already taken — find it in already-loaded orgs list
+          const existing = orgs.find(o => o.code === newOrg.code);
+          if (existing) { orgId = existing.id; }
+          else throw new Error(`Organization code "${newOrg.code}" already exists.`);
+        } else throw err;
+      }
+
+      // Create department under that org
+      const dRes = await api.post(`/organizations/${orgId}/departments/`, newDept);
+      results.push({ orgId, deptId: dRes.data.id });
+    }
   }
 
-  const { newOrg, newDept } = selection;
-
-  // Create org (or find existing by code if 409)
-  let orgId;
-  try {
-    const res = await api.post('/organizations/', newOrg);
-    orgId = res.data.id;
-  } catch (err) {
-    if (err.response?.status === 400 && err.response.data?.code) {
-      // Code already taken — find it in already-loaded orgs list
-      const existing = orgs.find(o => o.code === newOrg.code);
-      if (existing) { orgId = existing.id; }
-      else throw new Error(`Organization code "${newOrg.code}" already exists.`);
-    } else throw err;
-  }
-
-  // Create department under that org
-  const dRes = await api.post(`/organizations/${orgId}/departments/`, newDept);
-  return { orgId, deptId: dRes.data.id };
+  return results;
 }
 
 /* ── ComposePage ──────────────────────────────────────────────────────────── */
@@ -168,7 +206,7 @@ export default function ComposePage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!receiverSel) {
+    if (!receiverSel || (Array.isArray(receiverSel) && receiverSel.length === 0)) {
       setError('Please complete the receiver organization or department selection.');
       return;
     }
@@ -179,12 +217,11 @@ export default function ComposePage() {
     setLoading(true);
     setError('');
     try {
-      const receiver = await resolveOrgDept(receiverSel, receiverMode === 'internal' ? internalOrgs : externalOrgs);
+      const receivers = await resolveOrgDept(receiverSel, receiverMode === 'internal' ? internalOrgs : externalOrgs);
 
       await api.post('/notices/', {
         ...form,
-        receiver_org: receiver.orgId,
-        receiver_dept: receiver.deptId,
+        receivers: receivers.map(r => ({ org_id: r.orgId, dept_id: r.deptId })),
         sender_dept: senderDeptId,
       });
 
@@ -260,10 +297,11 @@ export default function ComposePage() {
             </div>
 
             <OrgDeptSelector
-              label={receiverMode === 'internal' ? 'To (NEA Department)' : 'To (Organization / Department)'}
+              label={receiverMode === 'internal' ? 'To (NEA Departments)' : 'To (Organization / Department)'}
               orgs={receiverMode === 'internal' ? internalOrgs : externalOrgs}
               onChange={setReceiverSel}
               allowNewOrg={receiverMode === 'external'}
+              allowMultiple={true}
             />
 
             {/* Message */}

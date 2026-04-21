@@ -68,7 +68,9 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
             <div className="detail-section-title">Notice information</div>
             {[
               ['Sender',      `${notice.sender_org_name} (${notice.sender_org_code}) / ${notice.sender_dept_name}`],
-              ['Receiver',    `${notice.receiver_org_name} (${notice.receiver_org_code}) / ${notice.receiver_dept_name}`],
+              ['Receiver',    notice.receivers && notice.receivers.length > 0
+                ? notice.receivers.map(r => `${r.receiver_org_name} (${r.receiver_org_code}) / ${r.receiver_dept_name}`).join(', ')
+                : notice.receiver_org_code ? `${notice.receiver_org_name} (${notice.receiver_org_code}) / ${notice.receiver_dept_name}` : '—'],
               direction === 'inbox' && ['Dept received', ['RECEIVED','ACKNOWLEDGED','IN_REVIEW','ACTION_TAKEN','CLOSED'].includes(notice.status) ? 'Yes' : 'No'],
               ['Created by',  notice.created_by_name || '—'],
               ['Created at',  fmt(notice.created_at)],

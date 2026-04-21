@@ -65,10 +65,6 @@ class Notice(models.Model):
                                           related_name='sent_notices')
     sender_dept      = models.ForeignKey('organizations.Department', on_delete=models.PROTECT,
                                           related_name='sent_notices')
-    receiver_org     = models.ForeignKey('organizations.Organization', on_delete=models.PROTECT,
-                                          related_name='received_notices')
-    receiver_dept    = models.ForeignKey('organizations.Department', on_delete=models.PROTECT,
-                                          related_name='received_notices')
     created_by       = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
                                           related_name='created_notices')
     status           = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
@@ -85,6 +81,37 @@ class Notice(models.Model):
 
     def can_transition_to(self, new_status):
         return new_status in self.VALID_TRANSITIONS.get(self.status, [])
+
+    @property
+    def receivers(self):
+        return self.notice_receivers.all()
+
+    @property
+    def receiver_org(self):
+        # For backward compatibility, return the first receiver's org
+        first_receiver = self.receivers.first()
+        return first_receiver.receiver_org if first_receiver else None
+
+    @property
+    def receiver_dept(self):
+        # For backward compatibility, return the first receiver's dept
+        first_receiver = self.receivers.first()
+        return first_receiver.receiver_dept if first_receiver else None
+
+
+class NoticeReceiver(models.Model):
+    notice       = models.ForeignKey(Notice, on_delete=models.CASCADE, related_name='notice_receivers')
+    receiver_org  = models.ForeignKey('organizations.Organization', on_delete=models.PROTECT,
+                                       related_name='received_notices')
+    receiver_dept = models.ForeignKey('organizations.Department', on_delete=models.PROTECT,
+                                       related_name='received_notices')
+
+    class Meta:
+        db_table = 'notice_receivers'
+        unique_together = ('notice', 'receiver_org', 'receiver_dept')
+
+    def __str__(self):
+        return f'{self.notice} -> {self.receiver_org.name}/{self.receiver_dept.name}'
 
 
 class NoticeEvent(models.Model):

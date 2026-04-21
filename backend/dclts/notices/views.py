@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework.pagination import PageNumberPagination
 
 from dclts.organizations.models import Organization, Department
-from .models import Notice, NoticeEvent, ReferenceCounter
+from .models import Notice, NoticeEvent, NoticeReceiver, ReferenceCounter
 from .serializers import (
     NoticeSerializer, NoticeListSerializer,
     NoticeCreateSerializer, StatusUpdateSerializer,
@@ -36,9 +36,8 @@ class NoticeListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         qs = Notice.objects.select_related(
             'sender_org', 'sender_dept',
-            'receiver_org', 'receiver_dept',
             'created_by',
-        ).order_by('-created_at')
+        ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept').order_by('-created_at')
 
         direction = self.request.query_params.get('direction')
         if direction == 'outbox':
@@ -47,10 +46,14 @@ class NoticeListCreateView(generics.ListCreateAPIView):
             else:
                 qs = qs.filter(sender_org=self.request.user.org)
         elif direction == 'inbox':
-            if self.request.user.org:
-                qs = qs.filter(receiver_org=self.request.user.org)
+            if self.request.user.role == 'admin':
+                qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
+            elif self.request.user.org:
+                qs = qs.filter(notice_receivers__receiver_org=self.request.user.org)
+                if self.request.user.dept:
+                    qs = qs.filter(notice_receivers__receiver_dept=self.request.user.dept)
             else:
-                qs = qs.filter(receiver_org__code__iexact='NEA')
+                qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
 
         status_filter   = self.request.query_params.get('status')
         type_filter     = self.request.query_params.get('type')
@@ -68,13 +71,13 @@ class NoticeListCreateView(generics.ListCreateAPIView):
 
         receiver_dept = self.request.query_params.get('receiver_dept')
         if receiver_dept:
-            qs = qs.filter(receiver_dept_id=receiver_dept)
+            qs = qs.filter(notice_receivers__receiver_dept_id=receiver_dept)
 
         only_received = self.request.query_params.get('only_received')
         if direction == 'inbox' and only_received in ('1', 'true', 'True'):
             qs = qs.filter(status__in=['RECEIVED', 'ACKNOWLEDGED', 'IN_REVIEW', 'ACTION_TAKEN', 'CLOSED'])
 
-        return qs
+        return qs.distinct()
 
     def get_default_sender(self):
         if self.request.user.role == 'admin':
@@ -160,17 +163,16 @@ class NoticeDetailView(generics.RetrieveAPIView):
     def get_queryset(self):
         return Notice.objects.select_related(
             'sender_org', 'sender_dept',
-            'receiver_org', 'receiver_dept',
             'created_by',
-        ).prefetch_related('events__action_by')
+        ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept', 'events__action_by')
 
 
 class NoticeStatusUpdateView(APIView):
     def patch(self, request, pk):
         try:
             notice = Notice.objects.select_related(
-                'sender_org', 'sender_dept', 'receiver_org', 'receiver_dept', 'created_by'
-            ).prefetch_related('events__action_by').get(pk=pk)
+                'sender_org', 'sender_dept', 'created_by'
+            ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept', 'events__action_by').get(pk=pk)
         except Notice.DoesNotExist:
             return Response({'error': 'Notice not found.'}, status=404)
 
