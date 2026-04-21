@@ -172,7 +172,7 @@ class NoticeStatusUpdateView(APIView):
         try:
             notice = Notice.objects.select_related(
                 'sender_org', 'sender_dept', 'created_by'
-            ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept', 'events__action_by').get(pk=pk)
+            ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept').get(pk=pk)
         except Notice.DoesNotExist:
             return Response({'error': 'Notice not found.'}, status=404)
 
@@ -213,8 +213,10 @@ class NoticeStatusUpdateView(APIView):
             remarks=remarks,
         )
 
-        # Refresh from DB to get updated events
-        notice.refresh_from_db()
+        # Refresh from DB and return with full detail including events
+        notice = Notice.objects.select_related(
+            'sender_org', 'sender_dept', 'created_by'
+        ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept', 'events__action_by').get(pk=pk)
         return Response(NoticeSerializer(notice).data)
 
 

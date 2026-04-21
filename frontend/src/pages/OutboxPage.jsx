@@ -57,7 +57,9 @@ function NoticePage({ direction, title, subtitle }) {
   }, [orgs]);
 
   const handleUpdated = (updated) => {
+    // Update selected notice with the new data
     setSelected(updated);
+    // Update the notice in the list
     setNotices(prev => prev.map(n => n.id === updated.id ? updated : n));
   };
 
