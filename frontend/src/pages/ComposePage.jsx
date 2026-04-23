@@ -321,7 +321,7 @@ export default function ComposePage() {
               orgs={receiverMode === 'internal' ? internalOrgs : externalOrgs}
               onChange={setReceiverSel}
               allowNewOrg={receiverMode === 'external'}
-              allowMultiple={false}
+              allowMultiple={receiverMode === 'internal'}
               showDepartments={receiverMode === 'internal'}
             />
 
