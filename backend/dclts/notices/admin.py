@@ -24,7 +24,7 @@ class NoticeAdmin(admin.ModelAdmin):
     inlines = [NoticeReceiverInline, NoticeEventInline]
 
     def get_receivers(self, obj):
-        return ", ".join([f"{r.receiver_org.name}/{r.receiver_dept.name}" for r in obj.receivers])
+        return ", ".join([f"{r.receiver_org.name}/{r.receiver_dept.name if r.receiver_dept else 'N/A'}" for r in obj.receivers])
     get_receivers.short_description = 'Receivers'
 
 

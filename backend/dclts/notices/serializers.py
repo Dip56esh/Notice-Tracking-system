@@ -16,8 +16,8 @@ class NoticeEventSerializer(serializers.ModelSerializer):
 class NoticeReceiverSerializer(serializers.ModelSerializer):
     receiver_org_name  = serializers.CharField(source='receiver_org.name', read_only=True)
     receiver_org_code  = serializers.CharField(source='receiver_org.code', read_only=True)
-    receiver_dept_name = serializers.CharField(source='receiver_dept.name', read_only=True)
-    receiver_dept_code = serializers.CharField(source='receiver_dept.code', read_only=True)
+    receiver_dept_name = serializers.SerializerMethodField()
+    receiver_dept_code = serializers.SerializerMethodField()
 
     class Meta:
         model = NoticeReceiver
@@ -25,6 +25,12 @@ class NoticeReceiverSerializer(serializers.ModelSerializer):
             'id', 'receiver_org_id', 'receiver_org_name', 'receiver_org_code',
             'receiver_dept_id', 'receiver_dept_name', 'receiver_dept_code'
         ]
+
+    def get_receiver_dept_name(self, obj):
+        return obj.receiver_dept.name if obj.receiver_dept else None
+
+    def get_receiver_dept_code(self, obj):
+        return obj.receiver_dept.code if obj.receiver_dept else None
 
 
 class NoticeSerializer(serializers.ModelSerializer):
@@ -65,11 +71,11 @@ class NoticeSerializer(serializers.ModelSerializer):
 
     def get_receiver_dept_name(self, obj):
         first_receiver = obj.notice_receivers.first()
-        return first_receiver.receiver_dept.name if first_receiver else None
+        return first_receiver.receiver_dept.name if first_receiver and first_receiver.receiver_dept else None
 
     def get_receiver_dept_code(self, obj):
         first_receiver = obj.notice_receivers.first()
-        return first_receiver.receiver_dept.code if first_receiver else None
+        return first_receiver.receiver_dept.code if first_receiver and first_receiver.receiver_dept else None
 
 
 class NoticeListSerializer(serializers.ModelSerializer):
@@ -107,11 +113,11 @@ class NoticeListSerializer(serializers.ModelSerializer):
 
     def get_receiver_dept_name(self, obj):
         first_receiver = obj.notice_receivers.first()
-        return first_receiver.receiver_dept.name if first_receiver else None
+        return first_receiver.receiver_dept.name if first_receiver and first_receiver.receiver_dept else None
 
     def get_receiver_dept_code(self, obj):
         first_receiver = obj.notice_receivers.first()
-        return first_receiver.receiver_dept.code if first_receiver else None
+        return first_receiver.receiver_dept.code if first_receiver and first_receiver.receiver_dept else None
 
 
 class NoticeCreateSerializer(serializers.ModelSerializer):

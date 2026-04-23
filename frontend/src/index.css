@@ -40,6 +40,45 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); font
 .main-content { flex: 1; overflow-y: auto; background: var(--bg); }
 .page { padding: 28px; max-width: 1200px; }
 
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.nav-item:hover {
+  background: var(--surface2);
+  color: var(--text);
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.2s ease;
+}
+
+.nav-item.active {
+  background: linear-gradient(135deg, var(--accent-bg) 0%, var(--accent) 100%);
+  color: white;
+  box-shadow: 0 2px 12px rgba(26, 79, 196, 0.3);
+  transform: translateX(4px);
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+  transition: all 0.3s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transition: all 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  transition: all 0.3s ease;
+}
+
 .logo { padding: 18px 16px 14px; border-bottom: 0.5px solid var(--border); }
 .logo-mark { font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: 0.05em; color: var(--accent-text); background: var(--accent-bg); padding: 3px 7px; border-radius: 5px; display: inline-block; margin-bottom: 6px; }
 .logo-title { font-size: 13px; font-weight: 600; line-height: 1.3; }

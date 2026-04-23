@@ -104,14 +104,15 @@ class NoticeReceiver(models.Model):
     receiver_org  = models.ForeignKey('organizations.Organization', on_delete=models.PROTECT,
                                        related_name='received_notices')
     receiver_dept = models.ForeignKey('organizations.Department', on_delete=models.PROTECT,
-                                       related_name='received_notices')
+                                       related_name='received_notices', null=True, blank=True)
 
     class Meta:
         db_table = 'notice_receivers'
         unique_together = ('notice', 'receiver_org', 'receiver_dept')
 
     def __str__(self):
-        return f'{self.notice} -> {self.receiver_org.name}/{self.receiver_dept.name}'
+        dept_name = self.receiver_dept.name if self.receiver_dept else 'N/A'
+        return f'{self.notice} -> {self.receiver_org.name}/{dept_name}'
 
 
 class NoticeEvent(models.Model):

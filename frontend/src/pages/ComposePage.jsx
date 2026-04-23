@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../utils/api.js';
 
 
-function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true, allowMultiple = false }) {
+function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true, allowMultiple = false, showDepartments = true }) {
   const [mode, setMode]             = useState('existing');
   const [selectedOrgId, setOrgId]   = useState('');
   const [selectedDeptIds, setDeptIds] = useState([]);
@@ -23,9 +23,17 @@ function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true, allowMulti
   // Notify parent whenever selection changes
   useEffect(() => {
     if (mode === 'existing') {
-      if (selectedOrgId && selectedDeptIds.length > 0) {
-        const selections = selectedDeptIds.map(deptId => ({ orgId: selectedOrgId, deptId }));
-        onChange(allowMultiple ? selections : selections[0]);
+      if (selectedOrgId) {
+        if (showDepartments) {
+          if (selectedDeptIds.length > 0) {
+            const selections = selectedDeptIds.map(deptId => ({ orgId: selectedOrgId, deptId }));
+            onChange(allowMultiple ? selections : selections[0]);
+          } else {
+            onChange(null);
+          }
+        } else {
+          onChange({ orgId: selectedOrgId, deptId: null });
+        }
       } else {
         onChange(null);
       }
@@ -39,7 +47,7 @@ function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true, allowMulti
         onChange(null);
       }
     }
-  }, [mode, selectedOrgId, selectedDeptIds, orgName, orgCode, deptName, deptCode, allowMultiple]);
+  }, [mode, selectedOrgId, selectedDeptIds, orgName, orgCode, deptName, deptCode, allowMultiple, showDepartments]);
 
   const handleDeptToggle = (deptId) => {
     if (allowMultiple) {
@@ -72,7 +80,41 @@ function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true, allowMulti
       )}
 
       {mode === 'existing' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        showDepartments ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="form-group">
+              <label>Organization</label>
+              <select value={selectedOrgId} onChange={e => { setOrgId(e.target.value); setDeptIds([]); }}>
+                <option value="">— Select organization —</option>
+                {orgs.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code})</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Department{allowMultiple ? 's' : ''}</label>
+              <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '4px', padding: '8px' }}>
+                {(selectedOrg?.departments || []).map(d => (
+                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <input
+                      type={allowMultiple ? "checkbox" : "radio"}
+                      id={`dept-${d.id}`}
+                      name="department"
+                      checked={selectedDeptIds.includes(d.id)}
+                      onChange={() => handleDeptToggle(d.id)}
+                    />
+                    <label htmlFor={`dept-${d.id}`} style={{ margin: 0, cursor: 'pointer' }}>
+                      {d.name} ({d.code})
+                    </label>
+                  </div>
+                ))}
+              </div>
+              {selectedDeptIds.length > 0 && allowMultiple && (
+                <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px' }}>
+                  {selectedDeptIds.length} department{selectedDeptIds.length > 1 ? 's' : ''} selected
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
           <div className="form-group">
             <label>Organization</label>
             <select value={selectedOrgId} onChange={e => { setOrgId(e.target.value); setDeptIds([]); }}>
@@ -80,31 +122,7 @@ function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true, allowMulti
               {orgs.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code})</option>)}
             </select>
           </div>
-          <div className="form-group">
-            <label>Department{allowMultiple ? 's' : ''}</label>
-            <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '4px', padding: '8px' }}>
-              {(selectedOrg?.departments || []).map(d => (
-                <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                  <input
-                    type={allowMultiple ? "checkbox" : "radio"}
-                    id={`dept-${d.id}`}
-                    name="department"
-                    checked={selectedDeptIds.includes(d.id)}
-                    onChange={() => handleDeptToggle(d.id)}
-                  />
-                  <label htmlFor={`dept-${d.id}`} style={{ margin: 0, cursor: 'pointer' }}>
-                    {d.name} ({d.code})
-                  </label>
-                </div>
-              ))}
-            </div>
-            {selectedDeptIds.length > 0 && allowMultiple && (
-              <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px' }}>
-                {selectedDeptIds.length} department{selectedDeptIds.length > 1 ? 's' : ''} selected
-              </div>
-            )}
-          </div>
-        </div>
+        )
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <div className="form-group">
@@ -143,9 +161,9 @@ async function resolveOrgDept(selections, orgs) {
   const results = [];
 
   for (const selection of selectionArray) {
-    if (selection.orgId && selection.deptId) {
+    if (selection.orgId !== undefined) {
       results.push({ orgId: selection.orgId, deptId: selection.deptId });
-    } else {
+    } else if (selection.newOrg) {
       const { newOrg, newDept } = selection;
 
       // Create org (or find existing by code if 409)
@@ -154,17 +172,19 @@ async function resolveOrgDept(selections, orgs) {
         const res = await api.post('/organizations/', newOrg);
         orgId = res.data.id;
       } catch (err) {
-        if (err.response?.status === 400 && err.response.data?.code) {
-          // Code already taken — find it in already-loaded orgs list
+        if (err.response?.status === 400) {
+          // Assume code already taken — find it in already-loaded orgs list
           const existing = orgs.find(o => o.code === newOrg.code);
           if (existing) { orgId = existing.id; }
-          else throw new Error(`Organization code "${newOrg.code}" already exists.`);
+          else throw new Error(`Failed to create organization. The code "${newOrg.code}" may already be in use.`);
         } else throw err;
       }
 
       // Create department under that org
       const dRes = await api.post(`/organizations/${orgId}/departments/`, newDept);
       results.push({ orgId, deptId: dRes.data.id });
+    } else {
+      throw new Error('Please complete the organization selection.');
     }
   }
 
@@ -297,11 +317,12 @@ export default function ComposePage() {
             </div>
 
             <OrgDeptSelector
-              label={receiverMode === 'internal' ? 'To (NEA Departments)' : 'To (Organization / Department)'}
+              label={receiverMode === 'internal' ? 'To (NEA Departments)' : 'To (Organization)'}
               orgs={receiverMode === 'internal' ? internalOrgs : externalOrgs}
               onChange={setReceiverSel}
               allowNewOrg={receiverMode === 'external'}
-              allowMultiple={true}
+              allowMultiple={false}
+              showDepartments={receiverMode === 'internal'}
             />
 
             {/* Message */}
