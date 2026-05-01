@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api.js';
 
 const VALID_TRANSITIONS = {
@@ -17,6 +18,7 @@ const fmt = (ts) => ts
   : '—';
 
 export default function NoticeDetail({ notice, direction, user, onClose, onUpdated }) {
+  const navigate = useNavigate();
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
@@ -59,11 +61,17 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
               <span className="badge badge-DRAFT" style={{ textTransform: 'uppercase' }}>{notice.type}</span>
             </div>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {direction === 'inbox' && (
+              <button className="btn btn-ghost btn-sm" onClick={() => navigate('/compose', { state: { replyTo: notice } })}>
+                ↩ Reply
+              </button>
+            )}
+            <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
+          </div>
         </div>
 
         <div className="detail-body">
-          {/* Info */}
           <div className="detail-section">
             <div className="detail-section-title">Notice information</div>
             {[

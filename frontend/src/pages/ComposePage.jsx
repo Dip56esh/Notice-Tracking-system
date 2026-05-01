@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../utils/api.js';
 
 
-function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true, allowMultiple = false, showDepartments = true }) {
+function OrgDeptSelector({ label, orgs, value = null, onChange, allowNewOrg = true, allowMultiple = false, showDepartments = true }) {
   const [mode, setMode]             = useState('existing');
   const [selectedOrgId, setOrgId]   = useState('');
   const [selectedDeptIds, setDeptIds] = useState([]);
@@ -13,6 +13,33 @@ function OrgDeptSelector({ label, orgs, onChange, allowNewOrg = true, allowMulti
   const [deptCode, setDeptCode]     = useState('');
 
   const selectedOrg = orgs.find(o => o.id === Number(selectedOrgId));
+
+  useEffect(() => {
+    if (!value) return;
+
+    if (Array.isArray(value)) {
+      const first = value[0];
+      setMode('existing');
+      setOrgId(first?.orgId?.toString() || '');
+      setDeptIds(value.map(v => Number(v.deptId)).filter(Boolean));
+      return;
+    }
+
+    if (value.newOrg) {
+      setMode('new');
+      setOrgName(value.newOrg.name || '');
+      setOrgCode(value.newOrg.code || '');
+      setDeptName(value.newDept?.name || '');
+      setDeptCode(value.newDept?.code || '');
+      return;
+    }
+
+    if (value.orgId !== undefined) {
+      setMode('existing');
+      setOrgId(value.orgId?.toString() || '');
+      setDeptIds(value.deptId ? [Number(value.deptId)] : []);
+    }
+  }, [value, allowMultiple]);
 
   useEffect(() => {
     if (!allowNewOrg && mode === 'new') {
@@ -194,7 +221,9 @@ async function resolveOrgDept(selections, orgs) {
 /* ── ComposePage ──────────────────────────────────────────────────────────── */
 export default function ComposePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [orgs, setOrgs] = useState([]);
+  const [initialReply, setInitialReply] = useState(null);
   const [form, setForm] = useState({ title: '', type: 'letter', priority: 'medium', message: '' });
   const [receiverMode, setReceiverMode] = useState('internal');
   const [receiverSel, setReceiverSel] = useState(null);
@@ -205,6 +234,63 @@ export default function ComposePage() {
   useEffect(() => {
     api.get('/organizations/').then(r => setOrgs(r.data)).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (location.state?.replyTo) {
+      setInitialReply(location.state.replyTo);
+      setForm(f => ({
+        ...f,
+        title: location.state.replyTo.title?.startsWith('Re:')
+          ? location.state.replyTo.title
+          : `Re: ${location.state.replyTo.title}`,
+      }));
+    }
+  }, [location.state]);
+
+  useEffect(() => {
+    if (!initialReply || !orgs.length) return;
+
+    const senderOrgCode = initialReply.sender_org_code;
+    const senderDeptCode = initialReply.sender_dept_code;
+    const senderOrg = orgs.find(o => o.code === senderOrgCode);
+
+    if (senderOrg) {
+      if (senderOrg.type === 'internal') {
+        const senderDept = senderOrg.departments?.find(d => d.code === senderDeptCode);
+        if (senderDept) {
+          setReceiverMode('internal');
+          setReceiverSel([{ orgId: senderOrg.id, deptId: senderDept.id }]);
+          return;
+        }
+      }
+      setReceiverMode(senderOrg.type === 'internal' ? 'internal' : 'external');
+      setReceiverSel({
+        newOrg: {
+          name: senderOrg.name,
+          code: senderOrg.code,
+          type: senderOrg.type === 'internal' ? 'external' : senderOrg.type || 'external',
+        },
+        newDept: {
+          name: initialReply.sender_dept_name || senderDeptCode || 'Department',
+          code: senderDeptCode || 'UNKNOWN',
+        },
+      });
+      return;
+    }
+
+    setReceiverMode('external');
+    setReceiverSel({
+      newOrg: {
+        name: initialReply.sender_org_name || senderOrgCode || 'Organization',
+        code: senderOrgCode || 'UNKNOWN',
+        type: 'external',
+      },
+      newDept: {
+        name: initialReply.sender_dept_name || senderDeptCode || 'Department',
+        code: senderDeptCode || 'UNKNOWN',
+      },
+    });
+  }, [initialReply, orgs]);
 
   const internalOrgs = orgs.filter(o => o.type === 'internal');
   const externalOrgs = orgs.filter(o => o.type !== 'internal');
@@ -319,6 +405,7 @@ export default function ComposePage() {
             <OrgDeptSelector
               label={receiverMode === 'internal' ? 'To (NEA Departments)' : 'To (Organization)'}
               orgs={receiverMode === 'internal' ? internalOrgs : externalOrgs}
+              value={receiverSel}
               onChange={setReceiverSel}
               allowNewOrg={receiverMode === 'external'}
               allowMultiple={receiverMode === 'internal'}
