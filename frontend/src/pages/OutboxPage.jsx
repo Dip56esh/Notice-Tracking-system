@@ -20,6 +20,7 @@ function NoticePage({ direction, title, subtitle }) {
   const [page,     setPage]     = useState(1);
   const [total,    setTotal]    = useState(0);
   const [pages,    setPages]    = useState(1);
+  const [neaDepts, setNeaDepts] = useState([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,12 +40,6 @@ function NoticePage({ direction, title, subtitle }) {
     finally { setLoading(false); }
   }, [direction, search, status, type, priority, dept, page]);
 
-  const [neaDepts, setNeaDepts] = useState([]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
   useEffect(() => {
     api.get('/organizations/')
       .then(res => setOrgs(res.data))
@@ -56,11 +51,24 @@ function NoticePage({ direction, title, subtitle }) {
     setNeaDepts(nea?.departments || []);
   }, [orgs]);
 
+  useEffect(() => {
+    load();
+  }, [load]);
+
   const handleUpdated = (updated) => {
-    // Update selected notice with the new data
     setSelected(updated);
-    // Update the notice in the list
     setNotices(prev => prev.map(n => n.id === updated.id ? updated : n));
+    load();
+  };
+
+  const handleRowClick = async (notice) => {
+    try {
+      // Fetch full notice details including message
+      const res = await api.get(`/notices/${notice.id}/`);
+      setSelected(res.data);
+    } catch (e) {
+      console.error('Failed to load notice details:', e);
+    }
   };
 
   return (
@@ -119,7 +127,7 @@ function NoticePage({ direction, title, subtitle }) {
 
         {loading
           ? <div className="loading">Loading…</div>
-          : <NoticeTable notices={notices} onRowClick={setSelected} direction={direction} />
+          : <NoticeTable notices={notices} onRowClick={handleRowClick} direction={direction} />
         }
 
         {/* Pagination */}

@@ -50,7 +50,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     email    = models.EmailField(unique=True)
     name     = models.CharField(max_length=255)
-    role     = models.CharField(max_length=20, choices=ROLE_CHOICES, default='officer')
+    role     = models.CharField(max_length=20, choices=ROLE_CHOICES, default='manager')
     org      = models.ForeignKey('organizations.Organization', null=True, blank=True,
                                  on_delete=models.SET_NULL, related_name='members')
     dept     = models.ForeignKey('organizations.Department', null=True, blank=True,
@@ -68,9 +68,16 @@ class User(AbstractBaseUser, PermissionsMixin):
         db_table = 'users'
 
     def clean(self):
-        """Ensure user belongs to NEA organization"""
+        """Ensure user belongs to NEA organization and enforce single admin."""
         if self.org and self.org.code != 'NEA':
             raise ValidationError('Users must belong to NEA organization.')
+
+        if self.role == 'admin':
+            existing_admins = self.__class__.objects.filter(role='admin')
+            if self.pk:
+                existing_admins = existing_admins.exclude(pk=self.pk)
+            if existing_admins.exists():
+                raise ValidationError('Only one admin user is allowed.')
 
     def save(self, *args, **kwargs):
         self.full_clean()

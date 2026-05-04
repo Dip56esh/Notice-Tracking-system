@@ -26,6 +26,16 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ['email', 'name', 'password', 'role', 'dept']  # Removed 'org' from fields
 
+    def validate_role(self, value):
+        if value not in ['admin', 'manager']:
+            raise serializers.ValidationError('Only admin and manager roles are allowed.')
+        return value
+
+    def validate(self, attrs):
+        if attrs.get('role') == 'admin' and User.objects.filter(role='admin').exists():
+            raise serializers.ValidationError({'role': 'Only one admin user is allowed.'})
+        return attrs
+
     def create(self, validated_data):
         password = validated_data.pop('password')
         
@@ -46,3 +56,17 @@ class UpdateRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['role']
+
+    def validate_role(self, value):
+        if value not in ['admin', 'manager']:
+            raise serializers.ValidationError('Only admin and manager roles are allowed.')
+        return value
+
+    def validate(self, attrs):
+        if attrs.get('role') == 'admin':
+            existing_admins = User.objects.filter(role='admin')
+            if self.instance:
+                existing_admins = existing_admins.exclude(pk=self.instance.pk)
+            if existing_admins.exists():
+                raise serializers.ValidationError({'role': 'Only one admin user is allowed.'})
+        return attrs

@@ -44,7 +44,11 @@ class NoticeListCreateView(generics.ListCreateAPIView):
             if self.request.user.role == 'admin':
                 qs = qs.filter(created_by=self.request.user)
             else:
-                qs = qs.filter(sender_org=self.request.user.org)
+                # For non-admin users, show notices they created OR sent from their department
+                qs = qs.filter(
+                    Q(created_by=self.request.user) |
+                    Q(sender_org=self.request.user.org, sender_dept=self.request.user.dept)
+                )
         elif direction == 'inbox':
             if self.request.user.role == 'admin':
                 qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
@@ -177,18 +181,22 @@ class NoticeDetailView(generics.RetrieveAPIView):
             'created_by',
         ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept', 'events__action_by')
         
-        # Apply the same filtering logic as the list view
         user = self.request.user
         if user.role == 'admin':
-            # Admins can see all notices sent to NEA
-            qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
+            # Admins can see all notices
+            pass
         elif user.org:
-            # Non-admins can only see notices sent to their org/dept
-            qs = qs.filter(notice_receivers__receiver_org=user.org)
-            if user.dept:
-                qs = qs.filter(notice_receivers__receiver_dept=user.dept)
+            # Non-admins can see:
+            # 1. Notices they created (outbox)
+            # 2. Notices sent from their department (outbox)
+            # 3. Notices they received (inbox)
+            qs = qs.filter(
+                Q(created_by=user) |  # Created by this user
+                Q(sender_org=user.org, sender_dept=user.dept) |  # Sent from their dept
+                Q(notice_receivers__receiver_org=user.org, notice_receivers__receiver_dept=user.dept)  # Received by their dept
+            )
         else:
-            # Fallback to NEA notices
+            # Fallback to NEA notices for users without org
             qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
         
         return qs.distinct()

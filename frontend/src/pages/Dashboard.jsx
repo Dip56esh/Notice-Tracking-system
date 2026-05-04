@@ -37,6 +37,16 @@ export default function Dashboard() {
 
   useEffect(() => { load(); }, []);
 
+  const handleRowClick = async (notice) => {
+    try {
+      // Fetch full notice details including message
+      const res = await api.get(`/notices/${notice.id}/`);
+      setSelected(res.data);
+    } catch (e) {
+      console.error('Failed to load notice details:', e);
+    }
+  };
+
   const handleUpdated = (updated) => {
     setSelected(updated);
     setNotices(prev => prev.map(n => n.id === updated.id ? updated : n));
@@ -607,7 +617,7 @@ export default function Dashboard() {
             Loading…
           </div>
         ) : (
-          <NoticeTable notices={notices} onRowClick={setSelected} mini />
+          <NoticeTable notices={notices} onRowClick={handleRowClick} mini />
         )}
       </div>
 

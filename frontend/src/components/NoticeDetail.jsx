@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { jsPDF } from 'jspdf';
 import api from '../utils/api.js';
 
 const VALID_TRANSITIONS = {
@@ -22,6 +23,7 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+  const [showPreview, setShowPreview] = useState(false);
 
   if (!notice) return null;
 
@@ -43,6 +45,78 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
 
   const userCanUpdate = canUpdateStatus();
   const replyAllowed = direction === 'inbox' && userCanUpdate;
+
+  const getLetterHeader = () => {
+    const sender = `${notice.sender_org_name || 'Sender Organization'}${notice.sender_dept_name ? `, ${notice.sender_dept_name}` : ''}`;
+    const receiver = notice.receivers && notice.receivers.length > 0
+      ? notice.receivers.map(r => `${r.receiver_org_name} / ${r.receiver_dept_name}`).join(', ')
+      : notice.receiver_org_name
+        ? `${notice.receiver_org_name} / ${notice.receiver_dept_name}`
+        : 'Recipient';
+
+    return {
+      sender,
+      receiver,
+      date: fmt(notice.sent_at || notice.created_at),
+      subject: notice.title || 'Official correspondence',
+      body: notice.message || '',
+      reference: notice.reference_no || '',
+      closing: notice.sender_dept_name || notice.sender_org_name || 'Office',
+    };
+  };
+
+  const downloadPdf = () => {
+    const letter = getLetterHeader();
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    const margin = 40;
+    const maxWidth = 512;
+    let y = 50;
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(11);
+    doc.setTextColor(40, 40, 40);
+
+    if (letter.reference) {
+      doc.text(`Reference: ${letter.reference}`, margin, y);
+      y += 18;
+    }
+
+    doc.text(`Date: ${letter.date}`, margin, y);
+    y += 25;
+
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text(letter.sender, margin, y);
+    y += 20;
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`To: ${letter.receiver}`, margin, y);
+    y += 22;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Subject: ${letter.subject}`, margin, y);
+    y += 24;
+
+    doc.setFont('helvetica', 'normal');
+    const greeting = ['Dear Sir or Madam,', ''];
+    doc.text(greeting, margin, y);
+    y += 24;
+
+    const bodyLines = doc.splitTextToSize(letter.body, maxWidth);
+    doc.text(bodyLines, margin, y);
+    y += bodyLines.length * 14 + 20;
+
+    const closing = ['Sincerely,', '', letter.closing];
+    doc.text(closing, margin, y);
+
+    const fileName = `${letter.reference || notice.title || 'letter'}`
+      .replace(/[^a-zA-Z0-9-_\.]/g, '_')
+      .slice(0, 120);
+    doc.save(`${fileName}.pdf`);
+  };
+
+  const closePreview = () => setShowPreview(false);
 
   const advance = async (newStatus) => {
     setLoading(true);
@@ -121,6 +195,76 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
               {notice.message}
             </div>
           </div>
+
+          {/* Preview and download */}
+          <div className="detail-section">
+            <div className="detail-section-title">Letter preview</div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => setShowPreview(true)}
+              >
+                Preview letter
+              </button>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={downloadPdf}
+              >
+                Download PDF
+              </button>
+            </div>
+          </div>
+
+          {showPreview && (
+            <div className="letter-fullscreen-overlay" onClick={(e) => {
+              if (e.target.classList.contains('letter-fullscreen-overlay')) closePreview();
+            }}>
+              <div className="letter-fullscreen-panel">
+                <div className="letter-fullscreen-header">
+                  <div>
+                    <div className="detail-section-title" style={{ marginBottom: 4, paddingBottom: 0 }}>Letter preview</div>
+                    <div className="letter-preview-summary">Preview</div>
+                  </div>
+                  <button className="btn btn-ghost btn-sm" onClick={closePreview}>✕ Close preview</button>
+                </div>
+                <div className="letter-fullscreen-content">
+                  <div className="letter-preview letter-fullscreen">
+                    <div className="letter-header">
+                      {notice.reference_no && <div className="letter-ref">Reference: {notice.reference_no}</div>}
+                      <div className="letter-date">Date: {fmt(notice.sent_at || notice.created_at)}</div>
+                      <div>
+                        <div className="letter-sender">{notice.sender_org_name || 'Sender Organization'}</div>
+                        {notice.sender_dept_name && <div className="letter-sender-sub">{notice.sender_dept_name}</div>}
+                      </div>
+                    </div>
+                    <div className="letter-to">
+                      <div className="letter-label">To:</div>
+                      <div className="letter-recipient">
+                        {notice.receivers && notice.receivers.length > 0
+                          ? notice.receivers.map((receiver, index) => (
+                            <div key={index}>{receiver.receiver_org_name} / {receiver.receiver_dept_name}</div>
+                          ))
+                          : notice.receiver_org_name
+                            ? <div>{notice.receiver_org_name} / {notice.receiver_dept_name}</div>
+                            : <div>Recipient department</div>
+                        }
+                      </div>
+                    </div>
+                    <div className="letter-subject">Subject: {notice.title || 'Official correspondence'}</div>
+                    <div>Dear Sir/Madam,</div>
+                    {/* <div className="letter-body-wrapper"> */}
+                      {/* <div className="letter-body-label">Message body</div> */}
+                      <div className="letter-body-text">{notice.message}</div>
+                    {/* </div> */}
+                    <div className="letter-closing">
+                      <div>Sincerely,</div>
+                      <div>{notice.sender_dept_name || notice.sender_org_name || 'Office'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Timeline */}
           <div className="detail-section">

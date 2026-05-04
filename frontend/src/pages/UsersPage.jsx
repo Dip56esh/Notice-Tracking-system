@@ -8,9 +8,11 @@ export default function UsersPage() {
   const [depts,    setDepts]    = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form,     setForm]     = useState({ name: '', email: '', password: '', role: 'officer', dept: '' });
+  const [form,     setForm]     = useState({ name: '', email: '', password: '', role: 'manager', dept: '' });
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState('');
+
+  const hasAdmin = users.some(u => u.role === 'admin');
 
   const load = async () => {
     setLoading(true);
@@ -35,7 +37,7 @@ export default function UsersPage() {
       const payload = { ...form };
       if (!payload.dept) delete payload.dept;
       await api.post('/auth/register/', payload);
-      setForm({ name: '', email: '', password: '', role: 'officer', dept: '' });
+      setForm({ name: '', email: '', password: '', role: hasAdmin ? 'manager' : 'admin', dept: '' });
       setShowForm(false);
       load();
     } catch (err) {
@@ -96,10 +98,8 @@ export default function UsersPage() {
               <div className="form-group">
                 <label>Role</label>
                 <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-                  <option value="admin">Admin</option>
+                  {!hasAdmin && <option value="admin">Admin</option>}
                   <option value="manager">Manager</option>
-                  <option value="officer">Officer</option>
-                  <option value="viewer">Viewer</option>
                 </select>
               </div>
               <div className="form-group">
@@ -158,10 +158,7 @@ export default function UsersPage() {
                             style={{ fontFamily: 'var(--font)', fontSize: 11, padding: '3px 6px', borderRadius: 5, border: '0.5px solid var(--border2)', background: 'var(--surface)', color: 'var(--text)', cursor: 'pointer' }}
                             onChange={e => updateRole(u.id, e.target.value)}
                           >
-                            <option value="admin">admin</option>
                             <option value="manager">manager</option>
-                            <option value="officer">officer</option>
-                            <option value="viewer">viewer</option>
                           </select>
                         )}
                       </td>
