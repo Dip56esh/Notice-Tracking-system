@@ -24,6 +24,14 @@ class OrganizationListCreateView(generics.ListCreateAPIView):
         return Response(OrganizationSerializer(org).data, status=status.HTTP_201_CREATED)
 
 
+class DepartmentListView(generics.ListAPIView):
+    serializer_class = DepartmentSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        return Department.objects.select_related('org').order_by('org__name', 'name')
+
+
 class DepartmentCreateView(APIView):
     def post(self, request, org_id):
         org = get_object_or_404(Organization, pk=org_id)

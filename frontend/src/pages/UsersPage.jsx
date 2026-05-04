@@ -5,24 +5,22 @@ import { useAuth } from '../hooks/useAuth.jsx';
 export default function UsersPage() {
   const { user: me } = useAuth();
   const [users,    setUsers]    = useState([]);
-  const [orgs,     setOrgs]     = useState([]);
+  const [depts,    setDepts]    = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form,     setForm]     = useState({ name: '', email: '', password: '', role: 'officer', org: '', dept: '' });
+  const [form,     setForm]     = useState({ name: '', email: '', password: '', role: 'officer', dept: '' });
   const [saving,   setSaving]   = useState(false);
   const [error,    setError]    = useState('');
-
-  const depts = orgs.find(o => o.id === Number(form.org))?.departments || [];
 
   const load = async () => {
     setLoading(true);
     try {
-      const [uRes, oRes] = await Promise.all([
+      const [uRes, dRes] = await Promise.all([
         api.get('/auth/users/'),
-        api.get('/organizations/'),
+        api.get('/organizations/departments/'),
       ]);
       setUsers(uRes.data);
-      setOrgs(oRes.data);
+      setDepts(dRes.data);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -35,10 +33,9 @@ export default function UsersPage() {
     setError('');
     try {
       const payload = { ...form };
-      if (!payload.org)  delete payload.org;
       if (!payload.dept) delete payload.dept;
       await api.post('/auth/register/', payload);
-      setForm({ name: '', email: '', password: '', role: 'officer', org: '', dept: '' });
+      setForm({ name: '', email: '', password: '', role: 'officer', dept: '' });
       setShowForm(false);
       load();
     } catch (err) {
@@ -106,15 +103,8 @@ export default function UsersPage() {
                 </select>
               </div>
               <div className="form-group">
-                <label>Organization</label>
-                <select value={form.org} onChange={e => setForm(f => ({ ...f, org: e.target.value, dept: '' }))}>
-                  <option value="">— None —</option>
-                  {orgs.map(o => <option key={o.id} value={o.id}>{o.name} ({o.code})</option>)}
-                </select>
-              </div>
-              <div className="form-group">
                 <label>Department</label>
-                <select value={form.dept} onChange={e => setForm(f => ({ ...f, dept: e.target.value }))} disabled={!form.org}>
+                <select value={form.dept} onChange={e => setForm(f => ({ ...f, dept: e.target.value }))}>
                   <option value="">— None —</option>
                   {depts.map(d => <option key={d.id} value={d.id}>{d.name} ({d.code})</option>)}
                 </select>

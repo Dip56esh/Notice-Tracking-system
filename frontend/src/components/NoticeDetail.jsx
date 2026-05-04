@@ -27,6 +27,23 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
 
   const nextStatuses = VALID_TRANSITIONS[notice.status] || [];
 
+  // Check if user can update status for this notice
+  const canUpdateStatus = () => {
+    if (user.role === 'admin') return true;
+    if (!user.dept_id) return false;
+    
+    // Check if this notice was received by user's department
+    if (notice.receivers && notice.receivers.length > 0) {
+      return notice.receivers.some(receiver => receiver.receiver_dept_id === user.dept_id);
+    }
+    
+    // Fallback for backward compatibility
+    return notice.receiver_dept_id === user.dept_id;
+  };
+
+  const userCanUpdate = canUpdateStatus();
+  const replyAllowed = direction === 'inbox' && userCanUpdate;
+
   const advance = async (newStatus) => {
     setLoading(true);
     setError('');
@@ -62,7 +79,7 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            {direction === 'inbox' && (
+            {replyAllowed && (
               <button className="btn btn-ghost btn-sm" onClick={() => navigate('/compose', { state: { replyTo: notice } })}>
                 ↩ Reply
               </button>
@@ -136,7 +153,7 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
           </div>
 
           {/* Status actions */}
-          {nextStatuses.length > 0 && (
+          {nextStatuses.length > 0 && userCanUpdate && (
             <div className="detail-section">
               <div className="detail-section-title">Update status</div>
               {error && <div className="error-msg">{error}</div>}
@@ -169,6 +186,22 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
                     → {s}
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {nextStatuses.length > 0 && !userCanUpdate && (
+            <div className="detail-section">
+              <div className="detail-section-title">Status Update</div>
+              <div style={{ 
+                padding: 12, 
+                background: 'var(--surface2)', 
+                borderRadius: 7, 
+                border: '0.5px solid var(--border)',
+                fontSize: 12.5,
+                color: 'var(--muted)'
+              }}>
+                You don't have permission to update this notice's status. Only users from the receiving department can make updates.
               </div>
             </div>
           )}

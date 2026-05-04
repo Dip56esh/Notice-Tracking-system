@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth.jsx';
 import api from '../utils/api.js';
 
 
@@ -220,6 +221,7 @@ async function resolveOrgDept(selections, orgs) {
 
 /* ── ComposePage ──────────────────────────────────────────────────────────── */
 export default function ComposePage() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [orgs, setOrgs] = useState([]);
@@ -246,6 +248,19 @@ export default function ComposePage() {
       }));
     }
   }, [location.state]);
+
+  useEffect(() => {
+    if (!initialReply || !user) return;
+    if (user.role === 'admin') return;
+
+    const isReceiver = (initialReply.receivers || []).some(
+      receiver => receiver.receiver_dept_id === user.dept_id
+    ) || initialReply.receiver_dept_id === user.dept_id;
+
+    if (!isReceiver) {
+      setError('You are not permitted to reply to this notice because it was not received by your department.');
+    }
+  }, [initialReply, user]);
 
   useEffect(() => {
     if (!initialReply || !orgs.length) return;
@@ -323,12 +338,24 @@ export default function ComposePage() {
     setLoading(true);
     setError('');
     try {
+      if (initialReply && user?.role !== 'admin') {
+        const isReceiver = (initialReply.receivers || []).some(
+          receiver => receiver.receiver_dept_id === user.dept_id
+        ) || initialReply.receiver_dept_id === user.dept_id;
+        if (!isReceiver) {
+          setError('You are not permitted to reply to this notice because it was not received by your department.');
+          setLoading(false);
+          return;
+        }
+      }
+
       const receivers = await resolveOrgDept(receiverSel, receiverMode === 'internal' ? internalOrgs : externalOrgs);
 
       await api.post('/notices/', {
         ...form,
         receivers: receivers.map(r => ({ org_id: r.orgId, dept_id: r.deptId })),
         sender_dept: senderDeptId,
+        ...(initialReply ? { reply_to_id: initialReply.id } : {}),
       });
 
       navigate('/outbox');

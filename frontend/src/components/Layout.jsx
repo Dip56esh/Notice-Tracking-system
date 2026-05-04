@@ -85,7 +85,7 @@ export default function Layout() {
               marginBottom: '2px',
               transition: 'all 0.2s ease'
             }}>
-              <span className="nav-icon" style={{ fontSize: '14px' }}>↗</span> Outbox
+              <span className="nav-icon" style={{ fontSize: '14px' }}>↗</span> Dispatch
             </NavLink>
             <NavLink to="/inbox" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} style={{
               borderRadius: '8px',

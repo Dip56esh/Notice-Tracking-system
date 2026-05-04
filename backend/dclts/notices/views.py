@@ -142,6 +142,17 @@ class NoticeListCreateView(generics.ListCreateAPIView):
             except Department.DoesNotExist:
                 raise serializers.ValidationError({'sender_dept': 'Invalid sender department.'})
 
+        # If this is a reply, ensure the requesting user is actually a receiver of the original notice
+        reply_to_id = serializer.validated_data.get('reply_to_id')
+        if reply_to_id and request.user.role != 'admin':
+            try:
+                original_notice = Notice.objects.prefetch_related('notice_receivers__receiver_dept').get(pk=reply_to_id)
+            except Notice.DoesNotExist:
+                raise serializers.ValidationError({'reply_to_id': 'Original notice not found.'})
+
+            if not request.user.dept or not original_notice.notice_receivers.filter(receiver_dept=request.user.dept).exists():
+                raise serializers.ValidationError({'reply_to_id': 'You are not permitted to reply to this notice.'})
+
         self.perform_create(serializer)
         notice = serializer.instance
         return Response(NoticeListSerializer(notice).data, status=status.HTTP_201_CREATED)
@@ -161,10 +172,26 @@ class NoticeDetailView(generics.RetrieveAPIView):
     serializer_class = NoticeSerializer
 
     def get_queryset(self):
-        return Notice.objects.select_related(
+        qs = Notice.objects.select_related(
             'sender_org', 'sender_dept',
             'created_by',
         ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept', 'events__action_by')
+        
+        # Apply the same filtering logic as the list view
+        user = self.request.user
+        if user.role == 'admin':
+            # Admins can see all notices sent to NEA
+            qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
+        elif user.org:
+            # Non-admins can only see notices sent to their org/dept
+            qs = qs.filter(notice_receivers__receiver_org=user.org)
+            if user.dept:
+                qs = qs.filter(notice_receivers__receiver_dept=user.dept)
+        else:
+            # Fallback to NEA notices
+            qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
+        
+        return qs.distinct()
 
 
 class NoticeStatusUpdateView(APIView):
@@ -188,6 +215,36 @@ class NoticeStatusUpdateView(APIView):
                 'error':   f'Cannot transition from {notice.status} to {new_status}.',
                 'allowed': allowed,
             }, status=400)
+
+        # Check permissions for status update/reply
+        # Only system admins or users from the receiving department can update status
+        if request.user.role != 'admin':
+            # Non-admin users can only reply to notices received by their department
+            if not request.user.dept:
+                return Response({
+                    'error': 'You must be assigned to a department to reply to notices.',
+                }, status=403)
+            
+            # Check if the notice was received by this user's department
+            # Use a more explicit query to ensure we're checking correctly
+            user_can_reply = False
+            for receiver in notice.notice_receivers.all():
+                if receiver.receiver_dept == request.user.dept:
+                    user_can_reply = True
+                    break
+            
+            if not user_can_reply:
+                # Get the departments that can reply to this notice
+                allowed_depts = []
+                for receiver in notice.notice_receivers.all():
+                    if receiver.receiver_dept:
+                        allowed_depts.append(receiver.receiver_dept.name)
+                
+                allowed_depts = list(set(allowed_depts))  # Remove duplicates
+                
+                return Response({
+                    'error': f'You do not have permission to reply to this notice. Only users from the following departments can reply: {", ".join(allowed_depts) if allowed_depts else "No departments assigned"}.',
+                }, status=403)
 
         # Generate reference number when moving to APPROVED
         if new_status == 'APPROVED' and not notice.reference_no:

@@ -1,5 +1,6 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
+from django.core.exceptions import ValidationError
 
 
 class UserManager(BaseUserManager):
@@ -7,15 +8,35 @@ class UserManager(BaseUserManager):
         if not email:
             raise ValueError('Email is required')
         email = self.normalize_email(email)
+        
+        # Ensure user belongs to NEA organization
+        from dclts.organizations.models import Organization
+        if 'org' not in extra or extra['org'] is None:
+            nea_org, _ = Organization.objects.get_or_create(
+                code='NEA',
+                defaults={'name': 'National Engineering Authority', 'type': 'internal'}
+            )
+            extra['org'] = nea_org
+        
         user = self.model(email=email, name=name, **extra)
         user.set_password(password)
         user.save(using=self._db)
         return user
 
     def create_superuser(self, email, name, password=None, **extra):
+        from dclts.organizations.models import Organization
         extra.setdefault('role', 'admin')
         extra.setdefault('is_staff', True)
         extra.setdefault('is_superuser', True)
+        
+        # Ensure superuser belongs to NEA organization
+        if 'org' not in extra or extra['org'] is None:
+            nea_org, _ = Organization.objects.get_or_create(
+                code='NEA',
+                defaults={'name': 'National Engineering Authority', 'type': 'internal'}
+            )
+            extra['org'] = nea_org
+        
         return self.create_user(email, name, password, **extra)
 
 
@@ -45,6 +66,15 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     class Meta:
         db_table = 'users'
+
+    def clean(self):
+        """Ensure user belongs to NEA organization"""
+        if self.org and self.org.code != 'NEA':
+            raise ValidationError('Users must belong to NEA organization.')
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.name} <{self.email}>'

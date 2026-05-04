@@ -121,6 +121,7 @@ class NoticeListSerializer(serializers.ModelSerializer):
 
 
 class NoticeCreateSerializer(serializers.ModelSerializer):
+    reply_to_id = serializers.IntegerField(write_only=True, required=False)
     receivers = serializers.ListField(
         child=serializers.DictField(),
         write_only=True,
@@ -130,9 +131,10 @@ class NoticeCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = Notice
-        fields = ['title', 'type', 'priority', 'message', 'receivers']
+        fields = ['title', 'type', 'priority', 'message', 'receivers', 'reply_to_id']
 
     def create(self, validated_data):
+        validated_data.pop('reply_to_id', None)
         receivers_data = validated_data.pop('receivers')
         notice = super().create(validated_data)
 

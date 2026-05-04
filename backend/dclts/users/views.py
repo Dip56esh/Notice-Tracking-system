@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate, get_user_model
+from dclts.organizations.models import Organization
 
 from .serializers import UserSerializer, RegisterSerializer, UpdateRoleSerializer
 
@@ -38,6 +39,8 @@ class RegisterView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        
+        # The serializer now automatically assigns NEA org, no need to handle it here
         user = serializer.save()
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
@@ -62,6 +65,13 @@ class UpdateRoleView(generics.UpdateAPIView):
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
+        
+        # Ensure user being updated is from NEA organization
+        if instance.org and instance.org.code != 'NEA':
+            return Response({
+                'error': 'Cannot update users outside of NEA organization.'
+            }, status=403)
+        
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()

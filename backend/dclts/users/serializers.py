@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from dclts.organizations.models import Organization
 
 User = get_user_model()
 
@@ -23,10 +24,18 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['email', 'name', 'password', 'role', 'org', 'dept']
+        fields = ['email', 'name', 'password', 'role', 'dept']  # Removed 'org' from fields
 
     def create(self, validated_data):
         password = validated_data.pop('password')
+        
+        # Always assign NEA organization automatically
+        nea_org, _ = Organization.objects.get_or_create(
+            code='NEA',
+            defaults={'name': 'National Engineering Authority', 'type': 'internal'}
+        )
+        validated_data['org'] = nea_org
+        
         user = User(**validated_data)
         user.set_password(password)
         user.save()
