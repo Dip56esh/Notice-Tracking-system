@@ -100,12 +100,12 @@ function NoticePage({ direction, title, subtitle }) {
               value={search}
               onChange={e => { setSearch(e.target.value); setPage(1); }} />
           </div>
-          {direction === 'inbox' && (
+          {/* {direction === 'inbox' && (
             <select style={{ width: 170 }} value={dept} onChange={e => { setDept(e.target.value); setPage(1); }}>
               <option value="">All NEA departments</option>
               {neaDepts.map(d => <option key={d.id} value={d.id}>{d.name} ({d.code})</option>)}
             </select>
-          )}
+          )} */}
           <select style={{ width: 160 }} value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}>
             <option value="">All statuses</option>
             {['DRAFT','APPROVED','SENT','DELIVERED','RECEIVED','ACKNOWLEDGED','IN_REVIEW','ACTION_TAKEN','CLOSED','REJECTED']

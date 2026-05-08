@@ -311,17 +311,26 @@ export default function ComposePage() {
   const externalOrgs = orgs.filter(o => o.type !== 'internal');
   const neaOrg = internalOrgs.find(o => o.code === 'NEA');
 
-  // Set default sender department to ADMIN if not set
+  // Set sender department based on user role and department
   useEffect(() => {
-    if (neaOrg && neaOrg.departments && neaOrg.departments.length > 0 && !senderDeptId) {
-      const adminDept = neaOrg.departments.find(d => d.code === 'ADMIN');
-      if (adminDept) {
-        setSenderDeptId(adminDept.id);
-      } else {
-        setSenderDeptId(neaOrg.departments[0].id);
+    if (!user || !neaOrg || !neaOrg.departments || neaOrg.departments.length === 0) return;
+
+    if (user.role === 'admin') {
+      // For system admin, allow selection but default to administration (ADMIN)
+      if (!senderDeptId) {
+        const adminDept = neaOrg.departments.find(d => d.code === 'ADMIN');
+        if (adminDept) {
+          setSenderDeptId(adminDept.id);
+        }
+      }
+    } else if (user.dept_code) {
+      // For other users, force sender to be their department
+      const userDept = neaOrg.departments.find(d => d.code === user.dept_code);
+      if (userDept) {
+        setSenderDeptId(userDept.id);
       }
     }
-  }, [neaOrg, senderDeptId]);
+  }, [user, neaOrg]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -332,7 +341,7 @@ export default function ComposePage() {
       return;
     }
     if (!senderDeptId) {
-      setError('Please select the sender department.');
+      setError('Sender department not set. Please try refreshing the page.');
       return;
     }
     setLoading(true);
@@ -410,12 +419,18 @@ export default function ComposePage() {
 
             <div className="form-group form-full">
               <label>Sender Department *</label>
-              <select value={senderDeptId} onChange={e => setSenderDeptId(parseInt(e.target.value))} required>
-                <option value="">— Select NEA department —</option>
-                {neaOrg?.departments?.map(d => (
-                  <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-                ))}
-              </select>
+              {user?.role === 'admin' ? (
+                <select value={senderDeptId} onChange={e => setSenderDeptId(parseInt(e.target.value))} required>
+                  <option value="">— Select NEA department —</option>
+                  {neaOrg?.departments?.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{ padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '4px', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
+                  {selectedDept ? `${selectedDept.name} (${selectedDept.code})` : 'Loading...'}
+                </div>
+              )}
             </div>
 
             <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>

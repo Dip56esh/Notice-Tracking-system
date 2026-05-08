@@ -16,6 +16,11 @@ export default function Dashboard() {
   const [selected, setSelected] = useState(null);
   const [loading, setLoading]   = useState(true);
 
+  // Notification state
+  const [notifications, setNotifications] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+
   // Tracker state
   const [reference, setReference] = useState('');
   const [trackedNotice, setTrackedNotice] = useState(null);
@@ -25,12 +30,17 @@ export default function Dashboard() {
   const load = async () => {
     setLoading(true);
     try {
-      const [sRes, nRes] = await Promise.all([
+      const [sRes, nRes, notifRes] = await Promise.all([
         api.get('/notices/stats/'),
         api.get('/notices/?limit=5'),
+        api.get('/notices/notifications/'),
       ]);
       setStats(sRes.data);
       setNotices(nRes.data.notices || []);
+      const notifs = notifRes.data.notices || [];
+      setNotifications(notifs);
+      setNotificationCount(notifs.length);
+      setNotificationCount((notifRes.data || []).length);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -50,6 +60,7 @@ export default function Dashboard() {
   const handleUpdated = (updated) => {
     setSelected(updated);
     setNotices(prev => prev.map(n => n.id === updated.id ? updated : n));
+    // Refresh notifications in case status changed
     load();
   };
 
@@ -101,16 +112,170 @@ export default function Dashboard() {
         </div>
         <div className="page-sub" style={{
           fontSize: '14px',
-          color: 'var(--muted)'
+          color: 'var(--muted)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
         }}>
-          Welcome back, {user?.name?.split(' ')[0]} &nbsp;·&nbsp; {new Date().toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })}
+          <span>
+            Welcome back, {user?.name?.split(' ')[0]} &nbsp;·&nbsp; {new Date().toLocaleDateString('en-US', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
+          </span>
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            style={{
+              background: notificationCount > 0 ? 'var(--accent-bg)' : 'var(--surface2)',
+              border: '1px solid var(--border)',
+              borderRadius: '18px',
+              padding: '6px 12px',
+              fontSize: '12px',
+              color: notificationCount > 0 ? 'var(--accent)' : 'var(--muted)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              position: 'relative'
+            }}
+          >
+            <span style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: notificationCount > 0 ? 'var(--accent)' : 'transparent',
+              display: 'inline-block'
+            }} />
+          🔔 Notifications {notificationCount > 0 && `(${notificationCount})`}
+          </button>
         </div>
       </div>
+
+      {/* Notifications Panel */}
+      {showNotifications && (
+        <div className="card" style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          marginBottom: '24px',
+          boxShadow: 'var(--shadow)',
+          position: 'relative',
+          overflow: 'hidden'
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '3px',
+            background: 'var(--accent)'
+          }} />
+          <div className="card-title" style={{
+            fontSize: '14px',
+            fontWeight: '600',
+            color: 'var(--text)',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            {/* <span style={{
+              width: '12px',
+              height: '12px',
+              borderRadius: '50%',
+              background: 'var(--accent)',
+              display: 'inline-block'
+            }} /> */}
+             🔔 Notifications
+          </div>
+          {notifications.length === 0 ? (
+            <div style={{
+              padding: '20px',
+              textAlign: 'center',
+              color: 'var(--muted)',
+              fontSize: '14px'
+            }}>
+              No new notifications
+            </div>
+          ) : (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+              maxHeight: '300px',
+              overflowY: 'auto'
+            }}>
+              {notifications.map((notice) => (
+                <div
+                  key={notice.id}
+                  onClick={() => {
+                    handleRowClick(notice);
+                    setShowNotifications(false);
+                  }}
+                  style={{
+                    padding: '12px',
+                    background: 'var(--surface2)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--accent-bg)';
+                    e.currentTarget.style.borderColor = 'var(--accent)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--surface2)';
+                    e.currentTarget.style.borderColor = 'var(--border)';
+                  }}
+                >
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    marginBottom: '8px'
+                  }}>
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: 'var(--text)',
+                      marginBottom: '4px'
+                    }}>
+                      {notice.title}
+                    </div>
+                    <span className={`badge badge-${notice.status}`} style={{
+                      fontSize: '10px',
+                      padding: '2px 6px'
+                    }}>
+                      {notice.status}
+                    </span>
+                  </div>
+                  <div style={{
+                    fontSize: '12px',
+                    color: 'var(--muted)',
+                    marginBottom: '8px'
+                  }}>
+                    From: {notice.sender_org_name} / {notice.sender_dept_name}
+                  </div>
+                  <div style={{
+                    fontSize: '11px',
+                    color: 'var(--faint)',
+                    fontFamily: 'var(--mono)'
+                  }}>
+                    {new Date(notice.created_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'short',
+                      day: 'numeric'
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Minimal Statistics Cards */}
       <div className="stat-grid" style={{

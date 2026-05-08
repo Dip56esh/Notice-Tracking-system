@@ -290,3 +290,32 @@ class NoticeTimelineView(generics.ListAPIView):
         events = NoticeEvent.objects.filter(notice_id=pk).select_related('action_by')
         from .serializers import NoticeEventSerializer
         return Response(NoticeEventSerializer(events, many=True).data)
+
+
+class NoticeNotificationsView(generics.ListAPIView):
+    serializer_class = NoticeListSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Notice.objects.select_related(
+            'sender_org', 'sender_dept', 'created_by'
+        ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept').order_by('-created_at')
+
+        if user.role == 'admin':
+            # Admins get all notices that are not yet closed
+            qs = qs.exclude(status__in=['CLOSED', 'REJECTED'])
+        else:
+            # For department users, show notices that are approved/sent/delivered
+            # and their department is a receiver, but the notice is not yet received
+            qs = qs.filter(
+                status__in=['APPROVED', 'SENT', 'DELIVERED'],
+                notice_receivers__receiver_org=user.org,
+                notice_receivers__receiver_dept=user.dept
+            )
+
+        return qs.distinct()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({'notices': serializer.data})

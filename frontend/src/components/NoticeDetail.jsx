@@ -258,7 +258,7 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
                     {/* </div> */}
                     <div className="letter-closing">
                       <div>Sincerely,</div>
-                      <div>{notice.sender_dept_name || notice.sender_org_name || 'Office'}</div>
+                      <div>{notice.sender_dept_name || notice.sender_org_name || 'Office'} department</div>
                     </div>
                   </div>
                 </div>
