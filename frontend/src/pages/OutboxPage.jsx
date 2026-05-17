@@ -83,7 +83,7 @@ function NoticePage({ direction, title, subtitle }) {
             </div>
           )}
         </div>
-        {direction === 'outbox' && (
+        {direction === 'outbox' && user?.role !== 'admin' && (
           <button className="btn btn-primary" onClick={() => navigate('/compose')}>
              Compose notice
           </button>

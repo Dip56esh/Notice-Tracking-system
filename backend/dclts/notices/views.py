@@ -35,48 +35,58 @@ class NoticeListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = Notice.objects.select_related(
-            'sender_org', 'sender_dept',
-            'created_by',
-        ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept').order_by('-created_at')
+            'sender_org', 'sender_dept', 'created_by',
+        ).prefetch_related(
+            'notice_receivers__receiver_org', 'notice_receivers__receiver_dept'
+        ).order_by('-created_at')
 
+        user = self.request.user
         direction = self.request.query_params.get('direction')
+
+        # Outbox: what this user / their department sent
         if direction == 'outbox':
-            if self.request.user.role == 'admin':
-                qs = qs.filter(created_by=self.request.user)
+            if user.role == 'admin':
+                # Department admin: only notices sent by their department
+                if user.dept:
+                    qs = qs.filter(sender_dept=user.dept)
+                else:
+                    # Global admin: see all outgoing notices
+                    qs = qs
             else:
-                # For non-admin users, show notices they created OR sent from their department
+                # Non-admins: notices they created OR notices sent from their department
                 qs = qs.filter(
-                    Q(created_by=self.request.user) |
-                    Q(sender_org=self.request.user.org, sender_dept=self.request.user.dept)
+                    Q(created_by=user) |
+                    Q(sender_org=user.org, sender_dept=user.dept)
                 )
+
+        # Inbox: what this user / their department received
         elif direction == 'inbox':
-            if self.request.user.role == 'admin':
-                qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
-            elif self.request.user.org:
-                qs = qs.filter(notice_receivers__receiver_org=self.request.user.org)
-                if self.request.user.dept:
-                    qs = qs.filter(notice_receivers__receiver_dept=self.request.user.dept)
+            if user.role == 'admin':
+                if user.dept:
+                    # Department admin: notices received by their department
+                    qs = qs.filter(notice_receivers__receiver_dept=user.dept)
+                else:
+                    # Global admin: see all NEA incoming notices
+                    qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
             else:
-                qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
+                # Non-admins: notices addressed to their org/department
+                if user.org:
+                    qs = qs.filter(notice_receivers__receiver_org=user.org)
+                    if user.dept:
+                        qs = qs.filter(notice_receivers__receiver_dept=user.dept)
+                else:
+                    qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
 
-        status_filter   = self.request.query_params.get('status')
-        type_filter     = self.request.query_params.get('type')
-        priority_filter = self.request.query_params.get('priority')
-        search          = self.request.query_params.get('search')
-
-        if status_filter:
-            qs = qs.filter(status=status_filter)
-        if type_filter:
-            qs = qs.filter(type=type_filter)
-        if priority_filter:
-            qs = qs.filter(priority=priority_filter)
-        if search:
-            qs = qs.filter(Q(title__icontains=search) | Q(reference_no__icontains=search))
-
+        # Optional: filter by a specific receiver_dept id passed as query param
         receiver_dept = self.request.query_params.get('receiver_dept')
         if receiver_dept:
-            qs = qs.filter(notice_receivers__receiver_dept_id=receiver_dept)
+            try:
+                receiver_dept_id = int(receiver_dept)
+                qs = qs.filter(notice_receivers__receiver_dept_id=receiver_dept_id)
+            except (ValueError, TypeError):
+                pass
 
+        # If requested, only return notices that have been received/processed
         only_received = self.request.query_params.get('only_received')
         if direction == 'inbox' and only_received in ('1', 'true', 'True'):
             qs = qs.filter(status__in=['RECEIVED', 'ACKNOWLEDGED', 'IN_REVIEW', 'ACTION_TAKEN', 'CLOSED'])
@@ -85,16 +95,21 @@ class NoticeListCreateView(generics.ListCreateAPIView):
 
     def get_default_sender(self):
         if self.request.user.role == 'admin':
-            nea_org, _ = Organization.objects.get_or_create(
-                code='NEA',
-                defaults={'name': 'National Engineering Authority', 'type': 'internal'}
-            )
-            nea_dept, _ = Department.objects.get_or_create(
-                org=nea_org,
-                code='ADMIN',
-                defaults={'name': 'Administration'}
-            )
-            return nea_org, nea_dept
+            if self.request.user.dept:
+                # Department admin - send from their department
+                return self.request.user.org, self.request.user.dept
+            else:
+                # Global admin - send from NEA/ADMIN
+                nea_org, _ = Organization.objects.get_or_create(
+                    code='NEA',
+                    defaults={'name': 'National Engineering Authority', 'type': 'internal'}
+                )
+                nea_dept, _ = Department.objects.get_or_create(
+                    org=nea_org,
+                    code='ADMIN',
+                    defaults={'name': 'Administration'}
+                )
+                return nea_org, nea_dept
 
         if self.request.user.org and self.request.user.dept:
             return self.request.user.org, self.request.user.dept
@@ -132,6 +147,12 @@ class NoticeListCreateView(generics.ListCreateAPIView):
         )
 
     def create(self, request, *args, **kwargs):
+        # Only admins and managers can compose letters
+        if request.user.role not in ['admin', 'manager']:
+            return Response({
+                'error': 'Only admins and managers can compose letters.',
+            }, status=403)
+        
         serializer = NoticeCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -147,15 +168,22 @@ class NoticeListCreateView(generics.ListCreateAPIView):
                 raise serializers.ValidationError({'sender_dept': 'Invalid sender department.'})
 
         # If this is a reply, ensure the requesting user is actually a receiver of the original notice
+        # Managers can reply to received notices, but only admins can change status
         reply_to_id = serializer.validated_data.get('reply_to_id')
-        if reply_to_id and request.user.role != 'admin':
+        if reply_to_id:
             try:
                 original_notice = Notice.objects.prefetch_related('notice_receivers__receiver_dept').get(pk=reply_to_id)
             except Notice.DoesNotExist:
                 raise serializers.ValidationError({'reply_to_id': 'Original notice not found.'})
 
-            if not request.user.dept or not original_notice.notice_receivers.filter(receiver_dept=request.user.dept).exists():
-                raise serializers.ValidationError({'reply_to_id': 'You are not permitted to reply to this notice.'})
+            # Check if user is authorized to reply
+            if request.user.role == 'admin':
+                # Admins can always reply
+                pass
+            else:
+                # Non-admin users (managers, officers, viewers) can only reply if they received the notice
+                if not request.user.dept or not original_notice.notice_receivers.filter(receiver_dept=request.user.dept).exists():
+                    raise serializers.ValidationError({'reply_to_id': 'You are not permitted to reply to this notice.'})
 
         self.perform_create(serializer)
         notice = serializer.instance
@@ -180,25 +208,27 @@ class NoticeDetailView(generics.RetrieveAPIView):
             'sender_org', 'sender_dept',
             'created_by',
         ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept', 'events__action_by')
-        
         user = self.request.user
+
         if user.role == 'admin':
-            # Admins can see all notices
-            pass
+            if user.dept:
+                # Department admin - can see outgoing and incoming for their dept
+                qs = qs.filter(
+                    Q(sender_dept=user.dept) |
+                    Q(notice_receivers__receiver_dept=user.dept)
+                )
+            # else: global admin sees all (no additional filter)
         elif user.org:
-            # Non-admins can see:
-            # 1. Notices they created (outbox)
-            # 2. Notices sent from their department (outbox)
-            # 3. Notices they received (inbox)
+            # Non-admins can see notices they created, sent from their dept, or received by their dept
             qs = qs.filter(
-                Q(created_by=user) |  # Created by this user
-                Q(sender_org=user.org, sender_dept=user.dept) |  # Sent from their dept
-                Q(notice_receivers__receiver_org=user.org, notice_receivers__receiver_dept=user.dept)  # Received by their dept
+                Q(created_by=user) |
+                Q(sender_org=user.org, sender_dept=user.dept) |
+                Q(notice_receivers__receiver_org=user.org, notice_receivers__receiver_dept=user.dept)
             )
         else:
             # Fallback to NEA notices for users without org
             qs = qs.filter(notice_receivers__receiver_org__code__iexact='NEA')
-        
+
         return qs.distinct()
 
 
@@ -224,35 +254,38 @@ class NoticeStatusUpdateView(APIView):
                 'allowed': allowed,
             }, status=400)
 
-        # Check permissions for status update/reply
-        # Only system admins or users from the receiving department can update status
+        # Check permissions for status update
         if request.user.role != 'admin':
-            # Non-admin users can only reply to notices received by their department
-            if not request.user.dept:
+            return Response({
+                'error': 'Only admins can update notice status. Managers can only compose letters.',
+            }, status=403)
+        
+        # Enforce workflow boundaries for department admins
+        # Workflow: Sender dept (DRAFT->DELIVERED), Receiver dept (DELIVERED->CLOSED)
+        if request.user.dept:
+            is_sender_admin = notice.sender_dept == request.user.dept
+            is_receiver_admin = notice.notice_receivers.filter(receiver_dept=request.user.dept).exists()
+            
+            if not is_sender_admin and not is_receiver_admin:
                 return Response({
-                    'error': 'You must be assigned to a department to reply to notices.',
+                    'error': f'You can only manage notices from your department ({request.user.dept.name}). This notice is from {notice.sender_dept.name}.',
                 }, status=403)
             
-            # Check if the notice was received by this user's department
-            # Use a more explicit query to ensure we're checking correctly
-            user_can_reply = False
-            for receiver in notice.notice_receivers.all():
-                if receiver.receiver_dept == request.user.dept:
-                    user_can_reply = True
-                    break
-            
-            if not user_can_reply:
-                # Get the departments that can reply to this notice
-                allowed_depts = []
-                for receiver in notice.notice_receivers.all():
-                    if receiver.receiver_dept:
-                        allowed_depts.append(receiver.receiver_dept.name)
-                
-                allowed_depts = list(set(allowed_depts))  # Remove duplicates
-                
-                return Response({
-                    'error': f'You do not have permission to reply to this notice. Only users from the following departments can reply: {", ".join(allowed_depts) if allowed_depts else "No departments assigned"}.',
-                }, status=403)
+            # Enforce status boundaries
+            if is_sender_admin and not is_receiver_admin:
+                # Sender dept admin: can update up to DELIVERED
+                sender_statuses = ['DRAFT', 'APPROVED', 'SENT', 'DELIVERED']
+                if new_status not in sender_statuses:
+                    return Response({
+                        'error': f'As sender department admin, you can only update to: {", ".join(sender_statuses)}',
+                    }, status=403)
+            elif is_receiver_admin and not is_sender_admin:
+                # Receiver dept admin: can update from DELIVERED onwards
+                receiver_statuses = ['RECEIVED', 'ACKNOWLEDGED', 'IN_REVIEW', 'ACTION_TAKEN', 'CLOSED']
+                if new_status not in receiver_statuses:
+                    return Response({
+                        'error': f'As receiver department admin, you can only update to: {", ".join(receiver_statuses)}',
+                    }, status=403)
 
         # Generate reference number when moving to APPROVED
         if new_status == 'APPROVED' and not notice.reference_no:
@@ -300,20 +333,35 @@ class NoticeNotificationsView(generics.ListAPIView):
         qs = Notice.objects.select_related(
             'sender_org', 'sender_dept', 'created_by'
         ).prefetch_related('notice_receivers__receiver_org', 'notice_receivers__receiver_dept').order_by('-created_at')
-
+        # Department admin: notifications for both outgoing and incoming work
         if user.role == 'admin':
-            # Admins get all notices that are not yet closed
-            qs = qs.exclude(status__in=['CLOSED', 'REJECTED'])
-        else:
-            # For department users, show notices that are approved/sent/delivered
-            # and their department is a receiver, but the notice is not yet received
-            qs = qs.filter(
-                status__in=['APPROVED', 'SENT', 'DELIVERED'],
-                notice_receivers__receiver_org=user.org,
-                notice_receivers__receiver_dept=user.dept
-            )
+            if user.dept:
+                outgoing_statuses = ['DRAFT', 'APPROVED', 'SENT', 'DELIVERED']
+                incoming_statuses = ['DELIVERED', 'RECEIVED', 'ACKNOWLEDGED', 'IN_REVIEW', 'ACTION_TAKEN', 'CLOSED']
 
-        return qs.distinct()
+                outgoing = qs.filter(sender_dept=user.dept, status__in=outgoing_statuses)
+                incoming = qs.filter(notice_receivers__receiver_dept=user.dept, status__in=incoming_statuses)
+                qs = (outgoing | incoming).distinct().order_by('-created_at')
+            else:
+                # Global admin: show all active notices (exclude closed/rejected)
+                qs = qs.exclude(status__in=['CLOSED', 'REJECTED'])
+        else:
+            # Non-admin users: limited notifications
+            #  - Outgoing: notices they created or their department sent (up to DELIVERED)
+            #  - Incoming: notices received by their department (DELIVERED/RECEIVED)
+            outgoing_statuses = ['DRAFT', 'APPROVED', 'SENT', 'DELIVERED']
+            incoming_statuses = ['DELIVERED', 'RECEIVED']
+
+            parts = Q(created_by=user, status__in=outgoing_statuses)
+            if user.org and user.dept:
+                parts |= Q(sender_org=user.org, sender_dept=user.dept, status__in=outgoing_statuses)
+                parts |= Q(notice_receivers__receiver_org=user.org, notice_receivers__receiver_dept=user.dept, status__in=incoming_statuses)
+            elif user.org:
+                parts |= Q(notice_receivers__receiver_org=user.org, status__in=incoming_statuses)
+
+            qs = qs.filter(parts).distinct()
+
+        return qs
 
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()

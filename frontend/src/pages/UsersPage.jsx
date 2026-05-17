@@ -130,7 +130,7 @@ export default function UsersPage() {
                   <th>Organization</th>
                   <th>Department</th>
                   <th>Role</th>
-                  {me?.role === 'admin' && <th>Actions</th>}
+                  {/* {me?.role === 'admin' && <th>Actions</th>} */}
                 </tr>
               </thead>
               <tbody>
@@ -150,7 +150,7 @@ export default function UsersPage() {
                     </td>
                     <td style={{ fontSize: 11.5 }}>{u.dept_code || '—'}</td>
                     <td><span className={`badge badge-${u.role}`}>{u.role}</span></td>
-                    {me?.role === 'admin' && (
+                    {/* {me?.role === 'admin' && (
                       <td>
                         {u.id !== me.id && (
                           <select
@@ -162,7 +162,7 @@ export default function UsersPage() {
                           </select>
                         )}
                       </td>
-                    )}
+                    )} */}
                   </tr>
                 ))}
                 {!users.length && (

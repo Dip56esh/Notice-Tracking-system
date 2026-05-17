@@ -71,14 +71,16 @@ export default function Layout() {
             }}>
               Correspondence
             </span>
-            <NavLink to="/compose" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} style={{
-              borderRadius: '8px',
-              padding: '10px 12px',
-              marginBottom: '2px',
-              transition: 'all 0.2s ease'
-            }}>
-              <span className="nav-icon" style={{ fontSize: '14px' }}>✦</span> Compose Notice
-            </NavLink>
+            {user?.role !== 'admin' && (
+              <NavLink to="/compose" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} style={{
+                borderRadius: '8px',
+                padding: '10px 12px',
+                marginBottom: '2px',
+                transition: 'all 0.2s ease'
+              }}>
+                <span className="nav-icon" style={{ fontSize: '14px' }}>✦</span> Compose Notice
+              </NavLink>
+            )}
             <NavLink to="/outbox" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} style={{
               borderRadius: '8px',
               padding: '10px 12px',

@@ -19,7 +19,6 @@ export default function Dashboard() {
   // Notification state
   const [notifications, setNotifications] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(0);
 
   // Tracker state
   const [reference, setReference] = useState('');
@@ -37,10 +36,8 @@ export default function Dashboard() {
       ]);
       setStats(sRes.data);
       setNotices(nRes.data.notices || []);
-      const notifs = notifRes.data.notices || [];
+      const notifs = notifRes.data.notices || notifRes.data || [];
       setNotifications(notifs);
-      setNotificationCount(notifs.length);
-      setNotificationCount((notifRes.data || []).length);
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   };
@@ -128,12 +125,12 @@ export default function Dashboard() {
           <button
             onClick={() => setShowNotifications(!showNotifications)}
             style={{
-              background: notificationCount > 0 ? 'var(--accent-bg)' : 'var(--surface2)',
+              background: notifications.length > 0 ? 'var(--accent-bg)' : 'var(--surface2)',
               border: '1px solid var(--border)',
               borderRadius: '18px',
               padding: '6px 12px',
               fontSize: '12px',
-              color: notificationCount > 0 ? 'var(--accent)' : 'var(--muted)',
+              color: notifications.length > 0 ? 'var(--accent)' : 'var(--muted)',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -145,10 +142,10 @@ export default function Dashboard() {
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              background: notificationCount > 0 ? 'var(--accent)' : 'transparent',
+              background: notifications.length > 0 ? 'var(--accent)' : 'transparent',
               display: 'inline-block'
             }} />
-          🔔 Notifications {notificationCount > 0 && `(${notificationCount})`}
+          🔔 Notifications {notifications.length > 0 && `(${notifications.length})`}
           </button>
         </div>
       </div>

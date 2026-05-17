@@ -95,7 +95,7 @@ function OrgDeptSelector({ label, orgs, value = null, onChange, allowNewOrg = tr
 
       {/* Mode toggle */}
       {allowNewOrg && !allowMultiple && (
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        <div className="org-selector-mode-toggle">
           <button type="button" className={`btn btn-sm ${mode === 'existing' ? 'btn-primary' : 'btn-ghost'}`}
             onClick={() => setMode('existing')}>
             Select existing
@@ -109,7 +109,7 @@ function OrgDeptSelector({ label, orgs, value = null, onChange, allowNewOrg = tr
 
       {mode === 'existing' ? (
         showDepartments ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="org-selector-grid">
             <div className="form-group">
               <label>Organization</label>
               <select value={selectedOrgId} onChange={e => { setOrgId(e.target.value); setDeptIds([]); }}>
@@ -119,9 +119,9 @@ function OrgDeptSelector({ label, orgs, value = null, onChange, allowNewOrg = tr
             </div>
             <div className="form-group">
               <label>Department{allowMultiple ? 's' : ''}</label>
-              <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '4px', padding: '8px' }}>
+              <div className="department-list">
                 {(selectedOrg?.departments || []).map(d => (
-                  <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <div key={d.id} className="department-item">
                     <input
                       type={allowMultiple ? "checkbox" : "radio"}
                       id={`dept-${d.id}`}
@@ -129,14 +129,14 @@ function OrgDeptSelector({ label, orgs, value = null, onChange, allowNewOrg = tr
                       checked={selectedDeptIds.includes(d.id)}
                       onChange={() => handleDeptToggle(d.id)}
                     />
-                    <label htmlFor={`dept-${d.id}`} style={{ margin: 0, cursor: 'pointer' }}>
+                    <label htmlFor={`dept-${d.id}`}>
                       {d.name} ({d.code})
                     </label>
                   </div>
                 ))}
               </div>
               {selectedDeptIds.length > 0 && allowMultiple && (
-                <div style={{ fontSize: '12px', color: 'var(--muted)', marginTop: '4px' }}>
+                <div className="department-summary">
                   {selectedDeptIds.length} department{selectedDeptIds.length > 1 ? 's' : ''} selected
                 </div>
               )}
@@ -232,6 +232,12 @@ export default function ComposePage() {
   const [senderDeptId, setSenderDeptId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      navigate('/outbox', { replace: true });
+    }
+  }, [user, navigate]);
 
   useEffect(() => {
     api.get('/organizations/').then(r => setOrgs(r.data)).catch(console.error);
@@ -380,13 +386,13 @@ export default function ComposePage() {
   const dCode = selectedDept?.code || 'ADMIN';
 
   return (
-    <div className="page">
-      <div className="page-header">
+    <div className="page compose-page">
+      <div className="page-header compose-header">
         <div className="page-title">Compose Notice</div>
         <div className="page-sub">Create a new official notice, letter, or circular</div>
       </div>
 
-      <div className="card" style={{ maxWidth: 800 }}>
+      <div className="card compose-card" style={{ maxWidth: 800 }}>
         <form onSubmit={handleSubmit}>
           {error && <div className="error-msg">{error}</div>}
           <div className="form-grid">
@@ -427,13 +433,13 @@ export default function ComposePage() {
                   ))}
                 </select>
               ) : (
-                <div style={{ padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '4px', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
+                <div style={{ padding: '8px 8px', border: '1px solid var(--border)', borderRadius: '4px', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
                   {selectedDept ? `${selectedDept.name} (${selectedDept.code})` : 'Loading...'}
                 </div>
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            <div className="compose-toggle-row">
               <button type="button" className={`btn btn-sm ${receiverMode === 'internal' ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => { setReceiverMode('internal'); setReceiverSel(null); }}>
                 Send to NEA department

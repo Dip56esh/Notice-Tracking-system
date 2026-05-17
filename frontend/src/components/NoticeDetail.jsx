@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import api from '../utils/api.js';
 
 const VALID_TRANSITIONS = {
@@ -23,8 +24,7 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
   const [remarks, setRemarks] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
-  const [showPreview, setShowPreview] = useState(false);
-
+  const [showPreview, setShowPreview] = useState(false);  const previewRef = useRef(null);
   if (!notice) return null;
 
   const nextStatuses = VALID_TRANSITIONS[notice.status] || [];
@@ -44,7 +44,7 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
   };
 
   const userCanUpdate = canUpdateStatus();
-  const replyAllowed = direction === 'inbox' && userCanUpdate;
+  const replyAllowed = direction === 'inbox' && userCanUpdate && user.role !== 'admin';
 
   const getLetterHeader = () => {
     const sender = `${notice.sender_org_name || 'Sender Organization'}${notice.sender_dept_name ? `, ${notice.sender_dept_name}` : ''}`;
@@ -65,8 +65,33 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
     };
   };
 
-  const downloadPdf = () => {
+  const downloadPdf = async () => {
     const letter = getLetterHeader();
+    const fileName = `${letter.reference || notice.title || 'letter'}`
+      .replace(/[^a-zA-Z0-9-_\.]/g, '_')
+      .slice(0, 120);
+
+    const previewElement = previewRef.current;
+    if (previewElement) {
+      try {
+        const canvas = await html2canvas(previewElement, {
+          backgroundColor: '#ffffff',
+          scale: 2,
+          useCORS: true,
+        });
+
+        const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+        const pageWidth = doc.internal.pageSize.getWidth() - 80;
+        const imgHeight = (canvas.height * pageWidth) / canvas.width;
+
+        doc.addImage(canvas.toDataURL('image/png'), 'PNG', 40, 40, pageWidth, imgHeight);
+        doc.save(`${fileName}.pdf`);
+        return;
+      } catch (err) {
+        console.error('PDF preview export failed:', err);
+      }
+    }
+
     const doc = new jsPDF({ unit: 'pt', format: 'letter' });
     const margin = 40;
     const maxWidth = 512;
@@ -110,9 +135,6 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
     const closing = ['Sincerely,', '', letter.closing];
     doc.text(closing, margin, y);
 
-    const fileName = `${letter.reference || notice.title || 'letter'}`
-      .replace(/[^a-zA-Z0-9-_\.]/g, '_')
-      .slice(0, 120);
     doc.save(`${fileName}.pdf`);
   };
 
@@ -223,18 +245,20 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
                 <div className="letter-fullscreen-header">
                   <div>
                     <div className="detail-section-title" style={{ marginBottom: 4, paddingBottom: 0 }}>Letter preview</div>
-                    <div className="letter-preview-summary">Preview</div>
+                    <div className="letter-fullscreen-summary">Preview</div>
                   </div>
                   <button className="btn btn-ghost btn-sm" onClick={closePreview}>✕ Close preview</button>
                 </div>
                 <div className="letter-fullscreen-content">
-                  <div className="letter-preview letter-fullscreen">
+                  <div ref={previewRef} className="letter-preview letter-fullscreen">
                     <div className="letter-header">
-                      {notice.reference_no && <div className="letter-ref">Reference: {notice.reference_no}</div>}
-                      <div className="letter-date">Date: {fmt(notice.sent_at || notice.created_at)}</div>
                       <div>
+                        {notice.reference_no && <div className="letter-ref">Reference: {notice.reference_no}</div>}
                         <div className="letter-sender">{notice.sender_org_name || 'Sender Organization'}</div>
                         {notice.sender_dept_name && <div className="letter-sender-sub">{notice.sender_dept_name}</div>}
+                      </div>
+                      <div className="letter-meta">
+                        <div className="letter-date">Date: {fmt(notice.sent_at || notice.created_at)}</div>
                       </div>
                     </div>
                     <div className="letter-to">
@@ -251,11 +275,8 @@ export default function NoticeDetail({ notice, direction, user, onClose, onUpdat
                       </div>
                     </div>
                     <div className="letter-subject">Subject: {notice.title || 'Official correspondence'}</div>
-                    <div>Dear Sir/Madam,</div>
-                    {/* <div className="letter-body-wrapper"> */}
-                      {/* <div className="letter-body-label">Message body</div> */}
-                      <div className="letter-body-text">{notice.message}</div>
-                    {/* </div> */}
+                    <div className="letter-greeting">Dear Sir/Madam,</div>
+                    <div className="letter-body-text">{notice.message}</div>
                     <div className="letter-closing">
                       <div>Sincerely,</div>
                       <div>{notice.sender_dept_name || notice.sender_org_name || 'Office'} department</div>

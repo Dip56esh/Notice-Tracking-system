@@ -32,8 +32,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        if attrs.get('role') == 'admin' and User.objects.filter(role='admin').exists():
-            raise serializers.ValidationError({'role': 'Only one admin user is allowed.'})
+        # Allow multiple admins - each can be department-specific
         return attrs
 
     def create(self, validated_data):
@@ -63,10 +62,5 @@ class UpdateRoleSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        if attrs.get('role') == 'admin':
-            existing_admins = User.objects.filter(role='admin')
-            if self.instance:
-                existing_admins = existing_admins.exclude(pk=self.instance.pk)
-            if existing_admins.exists():
-                raise serializers.ValidationError({'role': 'Only one admin user is allowed.'})
+        # Allow multiple admins - each can be department-specific
         return attrs

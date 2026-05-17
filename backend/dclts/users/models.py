@@ -68,16 +68,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         db_table = 'users'
 
     def clean(self):
-        """Ensure user belongs to NEA organization and enforce single admin."""
+        """Ensure user belongs to NEA organization."""
         if self.org and self.org.code != 'NEA':
             raise ValidationError('Users must belong to NEA organization.')
 
-        if self.role == 'admin':
-            existing_admins = self.__class__.objects.filter(role='admin')
-            if self.pk:
-                existing_admins = existing_admins.exclude(pk=self.pk)
-            if existing_admins.exists():
-                raise ValidationError('Only one admin user is allowed.')
+        # Admins can be department-specific or global
+        # Multiple admins are now supported, each managing their department
 
     def save(self, *args, **kwargs):
         self.full_clean()
