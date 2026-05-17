@@ -67,7 +67,7 @@ export default function Dashboard() {
     setTrackError('');
     setTrackedNotice(null);
     try {
-      const res = await api.get(`/notices/?search=${encodeURIComponent(reference.trim())}&limit=10`);
+      const res = await api.get(`/notices/?reference_no=${encodeURIComponent(reference.trim())}&limit=10`);
       const found = res.data.notices || [];
       if (found.length === 0) {
         setTrackError('No notice found with this reference number.');

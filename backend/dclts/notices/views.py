@@ -91,6 +91,17 @@ class NoticeListCreateView(generics.ListCreateAPIView):
         if direction == 'inbox' and only_received in ('1', 'true', 'True'):
             qs = qs.filter(status__in=['RECEIVED', 'ACKNOWLEDGED', 'IN_REVIEW', 'ACTION_TAKEN', 'CLOSED'])
 
+        # Exact reference lookup for tracking or direct reference queries
+        reference_no = self.request.query_params.get('reference_no')
+        if reference_no:
+            qs = qs.filter(reference_no__iexact=reference_no.strip())
+        else:
+            search_term = self.request.query_params.get('search')
+            if search_term:
+                search_term = search_term.strip()
+                if search_term:
+                    qs = qs.filter(reference_no__iexact=search_term)
+
         return qs.distinct()
 
     def get_default_sender(self):
